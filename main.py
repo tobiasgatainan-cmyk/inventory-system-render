@@ -1,7 +1,5 @@
-from flask import Flask, jsonify
+from flask import Flask
 import json
-import os
-from datetime import datetime
 
 app = Flask(__name__)
 
@@ -18,10 +16,9 @@ ITEMS = [
     {'id': '10', 'cat': '文具', 'name': '訂書針', 'unit': '盒', 'specs': [{'sid': 's10a', 'name': '10號', 'qty': 7, 'safe': 2}], 'supplier': '文具批發'}
 ]
 
-items_json = json.dumps(ITEMS, ensure_ascii=False)
-
 @app.route('/')
-def home():
+def index():
+    items_json = json.dumps(ITEMS, ensure_ascii=False)
     return f'''<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -29,91 +26,16 @@ def home():
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>美善基金會庫存管理系統</title>
 <style>
-body {{ 
-    font-family: 'Noto Sans TC', Arial, sans-serif; 
-    background: #fdf6f0; 
-    margin: 0; 
-    padding: 20px; 
-    color: #2a1f1a;
-}}
-.topnav {{ 
-    background: #fe7b81; 
-    color: white; 
-    padding: 15px 24px; 
-    border-radius: 8px; 
-    margin-bottom: 20px; 
-    font-weight: bold;
-    font-size: 18px;
-}}
-.search {{ 
-    width: 100%; 
-    padding: 12px; 
-    margin-bottom: 20px; 
-    border: 1px solid #ddd; 
-    border-radius: 8px;
-    font-family: 'Noto Sans TC', Arial;
-    font-size: 14px;
-}}
-.stats {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 12px;
-    margin-bottom: 20px;
-}}
-.stat-card {{
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
-    border: 1px solid #ddd;
-    text-align: center;
-}}
-.stat-label {{
-    font-size: 12px;
-    color: #999;
-    margin-bottom: 8px;
-}}
-.stat-value {{
-    font-size: 28px;
-    font-weight: bold;
-    color: #fe7b81;
-}}
-.items {{ 
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
-    gap: 15px; 
-}}
-.item {{ 
-    background: white; 
-    padding: 15px; 
-    border-radius: 8px; 
-    border: 1px solid #ddd; 
-}}
-.item-cat {{
-    font-size: 12px;
-    color: #999;
-    margin-bottom: 8px;
-}}
-.item-name {{ 
-    font-size: 16px; 
-    font-weight: bold; 
-    margin-bottom: 10px; 
-}}
-.spec {{ 
-    display: flex; 
-    justify-content: space-between; 
-    padding: 8px; 
-    background: #f7ecdf; 
-    margin: 4px 0; 
-    border-radius: 4px;
-    font-size: 13px;
-}}
-.item-supplier {{
-    font-size: 11px;
-    color: #999;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #ddd;
-}}
+body {{ font-family: Arial; background: #fdf6f0; margin: 0; padding: 20px; color: #2a1f1a; }}
+.topnav {{ background: #fe7b81; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; }}
+.search {{ width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 8px; }}
+.stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }}
+.stat {{ background: white; padding: 15px; border-radius: 8px; text-align: center; }}
+.stat-val {{ font-size: 24px; font-weight: bold; color: #fe7b81; }}
+.items {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }}
+.item {{ background: white; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }}
+.item-name {{ font-weight: bold; margin: 8px 0; }}
+.spec {{ display: flex; justify-content: space-between; padding: 6px; background: #f7ecdf; margin: 3px 0; border-radius: 4px; font-size: 12px; }}
 </style>
 </head>
 <body>
@@ -126,29 +48,24 @@ const items = {items_json};
 function filter() {{
   const q = document.getElementById('search').value.toLowerCase();
   const filtered = items.filter(i => i.name.toLowerCase().includes(q));
-  
   let ok = 0, low = 0, out = 0;
   filtered.forEach(item => {{
-    const isOut = item.specs.every(s => s.qty <= 0);
-    const isLow = item.specs.some(s => s.qty <= s.safe);
-    if (isOut) out++;
-    else if (isLow) low++;
+    if (item.specs.every(s => s.qty <= 0)) out++;
+    else if (item.specs.some(s => s.qty <= s.safe)) low++;
     else ok++;
   }});
-  
   document.getElementById('stats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">✔️ 充足</div><div class="stat-value">${{ok}}</div></div>
-    <div class="stat-card"><div class="stat-label">⚠️ 低庫存</div><div class="stat-value">${{low}}</div></div>
-    <div class="stat-card"><div class="stat-label">✕ 缺貨</div><div class="stat-value">${{out}}</div></div>
-    <div class="stat-card"><div class="stat-label">📦 總數</div><div class="stat-value">${{filtered.length}}</div></div>
+    <div class="stat"><div>✔️ 充足</div><div class="stat-val">${{ok}}</div></div>
+    <div class="stat"><div>⚠️ 低庫存</div><div class="stat-val">${{low}}</div></div>
+    <div class="stat"><div>✕ 缺貨</div><div class="stat-val">${{out}}</div></div>
+    <div class="stat"><div>📦 總數</div><div class="stat-val">${{filtered.length}}</div></div>
   `;
-  
   document.getElementById('items').innerHTML = filtered.map(item => `
     <div class="item">
-      <div class="item-cat">🏷️ ${{item.cat}}</div>
+      <div style="font-size:11px;color:#999">🏷️ ${{item.cat}}</div>
       <div class="item-name">${{item.name}}</div>
       ${{item.specs.map(s => `<div class="spec"><span>${{s.name}}</span><span>${{s.qty}}${{item.unit}}</span></div>`).join('')}}
-      <div class="item-supplier">📦 ${{item.supplier}}</div>
+      <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #ddd">📦 ${{item.supplier}}</div>
     </div>
   `).join('');
 }}
@@ -157,10 +74,5 @@ filter();
 </body>
 </html>'''
 
-@app.route('/api/items')
-def api_items():
-    return jsonify(ITEMS)
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run()

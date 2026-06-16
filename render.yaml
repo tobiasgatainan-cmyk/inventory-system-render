@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: inventory-system
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app
+    envVars:
+      - key: PORT
+        value: 5000

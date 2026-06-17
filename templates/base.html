@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}美善基金會庫存管理{% endblock %}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#fdf6f0;color:#333;min-height:100vh}
+
+/* ── Nav ── */
+.nav{background:#fe7b81;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:54px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.nav-brand{font-weight:700;font-size:16px;letter-spacing:.5px}
+.nav-links{display:flex;gap:4px;align-items:center}
+.nav-links a{color:#fff;text-decoration:none;padding:6px 12px;border-radius:6px;font-size:13px;transition:background .15s}
+.nav-links a:hover,.nav-links a.active{background:rgba(255,255,255,.25)}
+.nav-user{font-size:12px;opacity:.85;margin-left:12px;border-left:1px solid rgba(255,255,255,.4);padding-left:12px}
+.badge{background:rgba(255,255,255,.3);border-radius:10px;padding:2px 7px;font-size:11px;margin-left:4px}
+
+/* ── Layout ── */
+.container{max-width:1200px;margin:0 auto;padding:24px 20px}
+
+/* ── Flash ── */
+.flash-wrap{max-width:1200px;margin:12px auto 0;padding:0 20px}
+.alert{padding:10px 16px;border-radius:8px;margin-bottom:8px;font-size:13px}
+.alert-success{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.alert-danger {background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.alert-info   {background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb}
+
+/* ── Cards ── */
+.card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}
+
+/* ── Buttons ── */
+.btn{display:inline-block;padding:7px 16px;border-radius:7px;font-size:13px;border:none;cursor:pointer;text-decoration:none;transition:filter .15s}
+.btn:hover{filter:brightness(.92)}
+.btn-primary{background:#fe7b81;color:#fff}
+.btn-secondary{background:#e9ecef;color:#333}
+.btn-danger{background:#dc3545;color:#fff}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-success{background:#28a745;color:#fff}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#ffeaeb;color:#c0474d;padding:10px 12px;text-align:left;font-weight:600}
+td{padding:9px 12px;border-bottom:1px solid #f0e0e0}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fffaf9}
+
+/* ── Form ── */
+.form-group{margin-bottom:14px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;color:#555}
+input[type=text],input[type=email],input[type=password],input[type=number],select,textarea{
+  width:100%;padding:8px 11px;border:1px solid #ddd;border-radius:7px;font-size:13px;outline:none;transition:border .15s}
+input:focus,select:focus,textarea:focus{border-color:#fe7b81}
+
+/* ── Low stock badge ── */
+.low{color:#dc3545;font-weight:700}
+.tag{display:inline-block;background:#ffeaeb;color:#c0474d;border-radius:12px;padding:2px 9px;font-size:11px}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">📦 美善基金會庫存管理</div>
+  <div class="nav-links">
+    <a href="{{ url_for('index') }}" {% if request.endpoint=='index' %}class="active"{% endif %}>🏠 庫存</a>
+    {% if current_user.can_edit() %}
+    <a href="{{ url_for('admin_items') }}" {% if 'items' in request.endpoint %}class="active"{% endif %}>✏️ 品項管理</a>
+    <a href="{{ url_for('admin_logs') }}"  {% if 'logs'  in request.endpoint %}class="active"{% endif %}>📋 異動紀錄</a>
+    {% endif %}
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('admin_users') }}" {% if 'users' in request.endpoint %}class="active"{% endif %}>👥 使用者</a>
+    {% endif %}
+    <span class="nav-user">{{ current_user.username }} <span class="badge">{{ current_user.role }}</span></span>
+    <a href="{{ url_for('logout') }}">登出</a>
+  </div>
+</nav>
+
+<div class="flash-wrap">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+</div>
+
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+</body>
+</html>

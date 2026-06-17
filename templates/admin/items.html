@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}品項管理{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+  <h1 style="font-size:20px;color:#c0474d">✏️ 品項管理</h1>
+  <div style="display:flex;gap:8px">
+    {% if current_user.is_admin() %}
+    <form method="POST" action="{{ url_for('gsheet_sync') }}" style="display:inline">
+      <button type="submit" class="btn btn-success">📊 同步 Google Sheet</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('admin_add_item') }}" class="btn btn-primary">＋ 新增品項</a>
+  </div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+<table>
+  <thead>
+    <tr><th>品項名稱</th><th>分類</th><th>規格／庫存</th><th>供應商</th><th>操作</th></tr>
+  </thead>
+  <tbody>
+  {% for item in items %}
+  <tr>
+    <td><strong>{{ item.name }}</strong></td>
+    <td><span class="tag">{{ item.category.name if item.category else '—' }}</span></td>
+    <td>
+      {% for spec in item.specs %}
+      <div style="font-size:12px">
+        {{ spec.name }}：
+        <span class="{% if spec.qty <= spec.safe_qty %}low{% endif %}">{{ spec.qty }}</span>
+        / 安全 {{ spec.safe_qty }} {{ item.unit }}
+      </div>
+      {% endfor %}
+    </td>
+    <td style="font-size:12px;color:#888">{{ item.supplier or '—' }}</td>
+    <td>
+      <a href="{{ url_for('admin_edit_item', iid=item.id) }}" class="btn btn-sm btn-secondary">編輯</a>
+      <form method="POST" action="{{ url_for('admin_delete_item', iid=item.id) }}" style="display:inline"
+            onsubmit="return confirm('確定刪除 {{ item.name }}？')">
+        <button type="submit" class="btn btn-sm btn-danger">刪除</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}{{ '編輯' if item else '新增' }}品項{% endblock %}
+{% block content %}
+
+<div style="max-width:600px;margin:0 auto">
+  <h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">
+    📦 {{ '編輯品項' if item else '新增品項' }}
+  </h1>
+  <div class="card">
+    <form method="POST" id="itemForm">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>品項名稱</label>
+          <input type="text" name="name" value="{{ item.name if item else '' }}" required>
+        </div>
+        <div class="form-group">
+          <label>單位（包、個、盒…）</label>
+          <input type="text" name="unit" value="{{ item.unit if item else '' }}">
+        </div>
+        <div class="form-group">
+          <label>供應商</label>
+          <input type="text" name="supplier" value="{{ item.supplier if item else '' }}">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>分類</label>
+          <select name="category_id">
+            <option value="">— 未分類 —</option>
+            {% for c in cats %}
+            <option value="{{ c.id }}"
+              {% if item and item.category_id == c.id %}selected{% endif %}>
+              {{ c.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Specs -->
+      <div style="margin-top:16px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:#555">規格列表</div>
+        <div id="specs">
+          {% if item and item.specs %}
+            {% for spec in item.specs %}
+            <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+              <input type="text"   name="spec_name[]" value="{{ spec.name }}"     placeholder="規格名稱" style="flex:2">
+              <input type="number" name="spec_qty[]"  value="{{ spec.qty }}"      placeholder="數量" style="flex:1" min="0">
+              <input type="number" name="spec_safe[]" value="{{ spec.safe_qty }}" placeholder="安全庫存" style="flex:1" min="0">
+              <button type="button" class="btn btn-sm btn-danger" onclick="removeSpec(this)">✕</button>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+              <input type="text"   name="spec_name[]" placeholder="規格名稱（如 500ml）" style="flex:2">
+              <input type="number" name="spec_qty[]"  placeholder="數量" style="flex:1" min="0">
+              <input type="number" name="spec_safe[]" placeholder="安全庫存" style="flex:1" min="0">
+              <button type="button" class="btn btn-sm btn-danger" onclick="removeSpec(this)">✕</button>
+            </div>
+          {% endif %}
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addSpec()" style="margin-top:4px">＋ 新增規格</button>
+        <div style="font-size:11px;color:#aaa;margin-top:4px">規格名稱 ／ 現有數量 ／ 安全庫存</div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
+        <a href="{{ url_for('admin_items') }}" class="btn btn-secondary">取消</a>
+        <button type="submit" class="btn btn-primary">{{ '更新' if item else '新增' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function addSpec() {
+  const row = `<div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+    <input type="text"   name="spec_name[]" placeholder="規格名稱" style="flex:2">
+    <input type="number" name="spec_qty[]"  placeholder="數量" style="flex:1" min="0">
+    <input type="number" name="spec_safe[]" placeholder="安全庫存" style="flex:1" min="0">
+    <button type="button" class="btn btn-sm btn-danger" onclick="removeSpec(this)">✕</button>
+  </div>`;
+  document.getElementById('specs').insertAdjacentHTML('beforeend', row);
+}
+function removeSpec(btn) {
+  const rows = document.querySelectorAll('.spec-row');
+  if (rows.length > 1) btn.closest('.spec-row').remove();
+}
+</script>
+{% endblock %}

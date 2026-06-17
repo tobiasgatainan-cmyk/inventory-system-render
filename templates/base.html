@@ -64,15 +64,19 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
   <div class="nav-brand">📦 美善基金會庫存管理</div>
   <div class="nav-links">
     <a href="{{ url_for('index') }}" {% if request.endpoint=='index' %}class="active"{% endif %}>🏠 庫存</a>
-    {% if current_user.can_edit() %}
-    <a href="{{ url_for('admin_items') }}" {% if 'items' in request.endpoint %}class="active"{% endif %}>✏️ 品項管理</a>
-    <a href="{{ url_for('admin_logs') }}"  {% if 'logs'  in request.endpoint %}class="active"{% endif %}>📋 異動紀錄</a>
+    {% if current_user.is_authenticated %}
+      {% if current_user.can_edit() %}
+      <a href="{{ url_for('admin_items') }}" {% if 'items' in request.endpoint %}class="active"{% endif %}>✏️ 後台管理</a>
+      <a href="{{ url_for('admin_logs') }}"  {% if 'logs'  in request.endpoint %}class="active"{% endif %}>📋 異動紀錄</a>
+      {% endif %}
+      {% if current_user.is_admin() %}
+      <a href="{{ url_for('admin_users') }}" {% if 'users' in request.endpoint %}class="active"{% endif %}>👥 使用者</a>
+      {% endif %}
+      <span class="nav-user">{{ current_user.username }} <span class="badge">{{ current_user.role }}</span></span>
+      <a href="{{ url_for('logout') }}">登出</a>
+    {% else %}
+      <a href="{{ url_for('login') }}" {% if request.endpoint=='login' %}class="active"{% endif %}>🔐 登入後台</a>
     {% endif %}
-    {% if current_user.is_admin() %}
-    <a href="{{ url_for('admin_users') }}" {% if 'users' in request.endpoint %}class="active"{% endif %}>👥 使用者</a>
-    {% endif %}
-    <span class="nav-user">{{ current_user.username }} <span class="badge">{{ current_user.role }}</span></span>
-    <a href="{{ url_for('logout') }}">登出</a>
   </div>
 </nav>
 

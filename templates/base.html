@@ -88,4 +88,8 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
 {% endwith %}
 </div>
 
-<div class="co
+<div class="{% block container_class %}container{% endblock %}">
+{% block content %}{% endblock %}
+</div>
+</body>
+</html>

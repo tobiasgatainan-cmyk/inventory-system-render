@@ -51,7 +51,6 @@
 .item-card-name{font-size:15px;font-weight:700;letter-spacing:-.3px;margin-bottom:10px}
 .sdot{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%}
 .sok{background:var(--ok)}.slow{background:var(--low)}.sout{background:var(--out)}
-.item-card.low-stock{border-color:#f0b87a}.item-card.out-stock{border-color:#e89499}
 .spec-list{display:flex;flex-direction:column;gap:5px}
 .spec-row-d{display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--bg);border-radius:6px;font-size:12px;border:1px solid var(--border)}
 .spec-name{color:var(--text2);font-weight:500;flex:1}
@@ -60,10 +59,6 @@
 .idot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .item-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:10px;color:var(--text3)}
 .warn-label{font-size:11px;color:var(--low);margin-top:6px}
-.adj-form{display:flex;gap:4px;margin-top:4px}
-.adj-form input{flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none;min-width:0}
-.adj-form input:focus{border-color:var(--accent)}
-.adj-btn{padding:4px 10px;background:var(--ok);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap}
 .empty-state{text-align:center;padding:48px;color:var(--text3);grid-column:1/-1}
 @media(max-width:640px){.inv-body{grid-template-columns:1fr}.cat-sidebar{display:none}.stats-row{grid-template-columns:repeat(2,1fr)}}
 </style>
@@ -73,8 +68,8 @@
 <div class="inv-header">
   <div class="inv-header-top">
     <h1>庫存 <span>總覽</span></h1>
-    {% if current_user.can_edit() %}
-    <a href="{{ url_for('admin_add_item') }}" style="padding:7px 14px;background:var(--accent);color:#fff;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none">＋ 新增品項</a>
+    {% if current_user.is_authenticated and current_user.can_edit() %}
+    <a href="{{ url_for('admin_items') }}" style="padding:7px 14px;background:var(--accent);color:#fff;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none">⚙️ 進入後台</a>
     {% endif %}
   </div>
   <div class="search-bar">
@@ -147,14 +142,6 @@
             <span class="spec-unit">{{ item.unit }}</span>
             <span class="idot" style="background:{% if ss=='out' %}var(--out){% elif ss=='low' %}var(--low){% else %}var(--ok){% endif %}"></span>
           </div>
-          {% if current_user.can_edit() %}
-          <form method="POST" action="{{ url_for('stock_adjust') }}" class="adj-form">
-            <input type="hidden" name="spec_id" value="{{ spec.id }}">
-            <input type="number" name="change" placeholder="±數量" required>
-            <input type="text" name="reason" placeholder="原因">
-            <button type="submit" class="adj-btn">✓</button>
-          </form>
-          {% endif %}
           {% endfor %}
         </div>
         {% if has_out or has_low.v %}
@@ -162,9 +149,6 @@
         {% endif %}
         <div class="item-footer">
           <span>📦 {{ item.supplier or '—' }}</span>
-          {% if current_user.can_edit() %}
-          <a href="{{ url_for('admin_edit_item', iid=item.id) }}" style="color:var(--accent);text-decoration:none">編輯</a>
-          {% endif %}
         </div>
       </div>
       {% else %}
@@ -186,7 +170,7 @@ function setTab(tab,el){
 function filterItems(){
   const q=document.getElementById('searchInput').value.toLowerCase();
   const cards=document.querySelectorAll('#itemGrid .item-card');
-  let ok=0,low=0,out=0,visible=0;
+  let visible=0;
   cards.forEach(card=>{
     const name=card.dataset.name.toLowerCase();
     const cat=card.dataset.cat.toLowerCase();
@@ -194,10 +178,9 @@ function filterItems(){
     const mq=!q||name.includes(q)||cat.includes(q);
     const mt=currentTab==='all'||(currentTab==='low'&&status==='low')||(currentTab==='out'&&status==='out');
     card.style.display=(mq&&mt)?'':'none';
-    if(mq&&mt){visible++;if(status==='ok')ok++;else if(status==='low')low++;else out++;}
+    if(mq&&mt)visible++;
   });
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
 }
 </script>
-
 {% endblock %}

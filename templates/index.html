@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}庫存總覽{% endblock %}
+{% block container_class %}{% endblock %}
 {% block content %}
 
 {# ── 統計數字 ── #}
@@ -63,7 +64,7 @@
 @media(max-width:640px){.inv-body{grid-template-columns:1fr}.cat-sidebar{display:none}.stats-row{grid-template-columns:repeat(2,1fr)}}
 </style>
 
-<div style="margin:-24px -20px">
+<div>
 
 <div class="inv-header">
   <div class="inv-header-top">
@@ -183,4 +184,3 @@ function filterItems(){
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
 }
 </script>
-{% endblock %}

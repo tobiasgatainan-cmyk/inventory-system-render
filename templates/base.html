@@ -61,7 +61,7 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
 <body>
 
 <nav class="nav">
-  <div class="nav-brand">📦 美善基金會庫存管理</div>
+  <a href="{{ url_for('index') }}" style="color:white;text-decoration:none" class="nav-brand">📦 美善基金會庫存管理</a>
   <div class="nav-links">
     <a href="{{ url_for('index') }}" {% if request.endpoint=='index' %}class="active"{% endif %}>🏠 庫存</a>
     {% if current_user.is_authenticated %}
@@ -88,8 +88,4 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
 {% endwith %}
 </div>
 
-<div class="container">
-{% block content %}{% endblock %}
-</div>
-</body>
-</html>
+<div class="co

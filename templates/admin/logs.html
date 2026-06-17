@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}異動紀錄{% endblock %}
+{% block content %}
+
+<h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">📋 庫存異動紀錄（最近 200 筆）</h1>
+
+<div class="card" style="padding:0;overflow:hidden">
+<table>
+  <thead>
+    <tr><th>時間</th><th>品項</th><th>規格</th><th>異動</th><th>理由</th><th>操作人</th></tr>
+  </thead>
+  <tbody>
+  {% for log in logs %}
+  <tr>
+    <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
+    <td>{{ log.spec.item.name if log.spec else '—' }}</td>
+    <td style="font-size:12px">{{ log.spec.name if log.spec else '—' }}</td>
+    <td style="font-weight:700;color:{% if log.change > 0 %}#28a745{% else %}#dc3545{% endif %}">
+      {{ '+' if log.change > 0 else '' }}{{ log.change }}
+    </td>
+    <td style="font-size:12px;color:#666">{{ log.reason or '—' }}</td>
+    <td style="font-size:12px">{{ log.user.username if log.user else '—' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

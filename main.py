@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user, AnonymousUserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime
@@ -22,6 +22,16 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '請先登入'
+login_manager.login_message_category = 'info'
+
+# Allow anonymous access — only routes with @login_required are protected
+@login_manager.unauthorized_handler
+def unauthorized():
+    from flask import request as req
+    # Only redirect to login for admin routes
+    if req.path.startswith('/admin') or req.path.startswith('/stock'):
+        return redirect(url_for('login', next=req.path))
+    return redirect(url_for('login'))
 
 # ── Models ────────────────────────────────────────────────
 class User(UserMixin, db.Model):
@@ -80,6 +90,16 @@ class StockLog(db.Model):
 
 
 # ── Helpers ───────────────────────────────────────────────
+class AnonymousUser(AnonymousUserMixin):
+    def is_admin(self):
+        return False
+    def can_edit(self):
+        return False
+    username = ''
+    role = ''
+
+login_manager.anonymous_user = AnonymousUser
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))

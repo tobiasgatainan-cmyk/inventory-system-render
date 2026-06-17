@@ -162,9 +162,8 @@ def logout():
     return redirect(url_for('login'))
 
 
-# ── Main inventory view ───────────────────────────────────
+# ── Main inventory view (public) ─────────────────────────
 @app.route('/')
-@login_required
 def index():
     q    = request.args.get('q', '')
     cat  = request.args.get('cat', '')
@@ -243,8 +242,12 @@ def admin_delete_user(uid):
 @login_required
 @editor_required
 def admin_items():
-    items = Item.query.order_by(Item.name).all()
-    return render_template('admin/items.html', items=items)
+    items       = Item.query.order_by(Item.name).all()
+    cats        = Category.query.order_by(Category.name).all()
+    recent_logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(8).all()
+    all_logs    = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
+    return render_template('admin/items.html', items=items, cats=cats,
+                           recent_logs=recent_logs, all_logs=all_logs)
 
 
 @app.route('/admin/items/add', methods=['GET', 'POST'])

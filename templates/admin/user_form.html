@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}{{ '編輯' if user else '新增' }}使用者{% endblock %}
+{% block content %}
+
+<div style="max-width:480px;margin:0 auto">
+  <h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">
+    👤 {{ '編輯使用者' if user else '新增使用者' }}
+  </h1>
+  <div class="card">
+    <form method="POST">
+      {% if not user %}
+      <div class="form-group">
+        <label>帳號</label>
+        <input type="text" name="username" required>
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" value="{{ user.email if user else '' }}" required>
+      </div>
+      <div class="form-group">
+        <label>密碼 {% if user %}<span style="font-weight:400;color:#aaa">（留空則不變更）</span>{% endif %}</label>
+        <input type="password" name="password" {% if not user %}required{% endif %} placeholder="請輸入密碼">
+      </div>
+      <div class="form-group">
+        <label>角色</label>
+        <select name="role">
+          <option value="viewer"  {% if user and user.role=='viewer'  %}selected{% endif %}>檢視者</option>
+          <option value="editor"  {% if user and user.role=='editor'  %}selected{% endif %}>編輯者</option>
+          <option value="admin"   {% if user and user.role=='admin'   %}selected{% endif %}>管理員</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+        <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">取消</a>
+        <button type="submit" class="btn btn-primary">{{ '更新' if user else '新增' }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

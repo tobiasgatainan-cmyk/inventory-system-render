@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: inventory-system-render
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT main:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventory-db
+          property: connectionString
+      - key: GOOGLE_SHEET_ID
+        sync: false   # 手動在 Render Dashboard 填入
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false   # 手動在 Render Dashboard 填入
+
+databases:
+  - name: inventory-db
+    plan: free
+    databaseName: inventory
+    user: inventory_user

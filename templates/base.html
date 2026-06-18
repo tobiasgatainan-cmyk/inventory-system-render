@@ -19,6 +19,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fdf6f0;color:#333;min-h
 
 /* ── Layout ── */
 .container{max-width:1200px;margin:0 auto;padding:24px 20px}
+.container-full{max-width:100%;margin:0;padding:0}
 
 /* ── Flash ── */
 .flash-wrap{max-width:1200px;margin:12px auto 0;padding:0 20px}
@@ -88,4 +89,8 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
 {% endwith %}
 </div>
 
-<div class="co
+<div class="container-full" id="main-container">
+{% block content %}{% endblock %}
+</div>
+</body>
+</html>

@@ -188,7 +188,7 @@
           <td rowspan="{{ item.specs|length }}" style="font-weight:600">{{ item.name }}</td>
           {% endif %}
           <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ spec.name }}</span></td>
-          <td><span class="qty-num" style="color:{% if ss=='out' %}var(--out){% elif ss=='low' %}var(--low){% else %}var(--ok){% endif %};font-family:'Courier New',monospace;font-size:15px;font-weight:800;letter-spacing:1px">{{ spec.qty }}</span></td>
+          <td><span class="qty-num" style="color:{% if ss=='out' %}var(--out){% elif ss=='low' %}var(--low){% else %}var(--ok){% endif %};font-weight:700;font-size:14px">{{ spec.qty }}</span></td>
           <td style="color:var(--text3)">{{ item.unit }}</td>
           {% if loop.first %}
           <td rowspan="{{ item.specs|length }}" style="font-size:12px;color:var(--text3)">{{ item.supplier or '—' }}</td>

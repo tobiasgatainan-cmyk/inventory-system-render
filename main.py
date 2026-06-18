@@ -433,6 +433,18 @@ def api_low_stock():
 # ── Bootstrap ─────────────────────────────────────────────
 with app.app_context():
     db.create_all()
+    # Migration: add sort_order columns if not exist
+    with db.engine.connect() as conn:
+        from sqlalchemy import text
+        for sql in [
+            "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+            "ALTER TABLE items ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+        ]:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                conn.rollback()
     seed_data()
 
 if __name__ == '__main__':

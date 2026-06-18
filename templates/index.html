@@ -181,7 +181,7 @@ function setCat(cat,el){
 function filterItems(){
   const q=document.getElementById('searchInput').value.toLowerCase();
   const cards=document.querySelectorAll('#itemGrid .item-card');
-  let visible=0;
+  let visible=0, ok=0, low=0, out=0;
   cards.forEach(card=>{
     const name=card.dataset.name.toLowerCase();
     const cat=card.dataset.cat;
@@ -189,9 +189,20 @@ function filterItems(){
     const mq=!q||name.includes(q)||cat.toLowerCase().includes(q);
     const mc=!currentCat||cat===currentCat;
     const mt=currentTab==='all'||(currentTab==='low'&&status==='low')||(currentTab==='out'&&status==='out');
-    card.style.display=(mq&&mc&&mt)?'':'none';
-    if(mq&&mc&&mt)visible++;
+    const show=(mq&&mc&&mt);
+    card.style.display=show?'':'none';
+    if(mq&&mc){
+      // count by actual status (regardless of tab) for stats
+      if(status==='ok') ok++;
+      else if(status==='low') low++;
+      else out++;
+      if(show) visible++;
+    }
   });
+  // Update stat cards to reflect current cat filter
+  document.getElementById('cnt-ok').textContent=ok;
+  document.getElementById('cnt-low').textContent=low;
+  document.getElementById('cnt-out').textContent=out;
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
 }
 </script>

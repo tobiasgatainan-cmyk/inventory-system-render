@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}庫存總覽{% endblock %}
+{% block title %}美善基金會庫存系統{% endblock %}
 {% block content %}
 
 {# ── 統計數字 ── #}
@@ -87,13 +87,13 @@
 <div class="inv-body">
   <div class="cat-sidebar">
     <div class="cat-sidebar-title">類別</div>
-    <a href="{{ url_for('index') }}" class="cat-item {% if not selected_cat %}active{% endif %}">
-      全部類別<span class="cat-count">{{ items|length }}</span>
-    </a>
+    <button class="cat-item active" onclick="setCat('',this)">
+      全部類別<span class="cat-count" id="cnt-all">{{ items|length }}</span>
+    </button>
     {% for c in cats %}
-    <a href="{{ url_for('index', cat=c.name) }}" class="cat-item {% if c.name == selected_cat %}active{% endif %}">
+    <button class="cat-item" onclick="setCat('{{ c.name }}',this)">
       {{ c.name }}<span class="cat-count">{{ items|selectattr('category_id','eq',c.id)|list|length }}</span>
-    </a>
+    </button>
     {% endfor %}
   </div>
 
@@ -162,24 +162,35 @@
 
 <script>
 let currentTab='all';
+let currentCat='';
+
 function setTab(tab,el){
   currentTab=tab;
   document.querySelectorAll('.ftab').forEach(e=>e.classList.remove('active'));
   el.classList.add('active');
   filterItems();
 }
+
+function setCat(cat,el){
+  currentCat=cat;
+  document.querySelectorAll('.cat-item').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active');
+  filterItems();
+}
+
 function filterItems(){
   const q=document.getElementById('searchInput').value.toLowerCase();
   const cards=document.querySelectorAll('#itemGrid .item-card');
   let visible=0;
   cards.forEach(card=>{
     const name=card.dataset.name.toLowerCase();
-    const cat=card.dataset.cat.toLowerCase();
+    const cat=card.dataset.cat;
     const status=card.dataset.status;
-    const mq=!q||name.includes(q)||cat.includes(q);
+    const mq=!q||name.includes(q)||cat.toLowerCase().includes(q);
+    const mc=!currentCat||cat===currentCat;
     const mt=currentTab==='all'||(currentTab==='low'&&status==='low')||(currentTab==='out'&&status==='out');
-    card.style.display=(mq&&mt)?'':'none';
-    if(mq&&mt)visible++;
+    card.style.display=(mq&&mc&&mt)?'':'none';
+    if(mq&&mc&&mt)visible++;
   });
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
 }

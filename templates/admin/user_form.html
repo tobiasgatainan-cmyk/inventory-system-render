@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}{{ '編輯' if user else '新增' }}使用者{% endblock %}
+{% block title %}{{ '編輯' if user else '新增' }}使用者</div>
+{% endblock %}
 {% block content %}
+<div class="container">
 
 <div style="max-width:480px;margin:0 auto">
   <h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">
@@ -36,5 +38,6 @@
       </div>
     </form>
   </div>
+</div>
 </div>
 {% endblock %}

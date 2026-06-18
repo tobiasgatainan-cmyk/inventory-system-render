@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}{{ '編輯' if item else '新增' }}品項{% endblock %}
+{% block title %}{{ '編輯' if item else '新增' }}品項</div>
+{% endblock %}
 {% block content %}
+<div class="container">
 
 <div style="max-width:600px;margin:0 auto">
   <h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">
@@ -84,4 +86,5 @@ function removeSpec(btn) {
   if (rows.length > 1) btn.closest('.spec-row').remove();
 }
 </script>
+</div>
 {% endblock %}

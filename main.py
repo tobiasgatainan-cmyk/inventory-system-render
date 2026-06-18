@@ -52,9 +52,10 @@ class User(UserMixin, db.Model):
 
 class Category(db.Model):
     __tablename__ = 'categories'
-    id   = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
-    items = db.relationship('Item', backref='category', lazy=True)
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(50), unique=True, nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    items      = db.relationship('Item', backref='category', lazy=True)
 
 
 class Item(db.Model):
@@ -63,6 +64,7 @@ class Item(db.Model):
     name        = db.Column(db.String(100), nullable=False)
     unit        = db.Column(db.String(20))
     supplier    = db.Column(db.String(100))
+    sort_order  = db.Column(db.Integer, default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
     specs       = db.relationship('Spec', backref='item', lazy=True, cascade='all, delete-orphan')
@@ -187,7 +189,7 @@ def logout():
 def index():
     q    = request.args.get('q', '')
     cat  = request.args.get('cat', '')
-    cats = Category.query.order_by(Category.name).all()
+    cats = Category.query.order_by(Category.sort_order, Category.name).all()
     query = Item.query
     if q:
         query = query.filter(Item.name.ilike(f'%{q}%'))
@@ -195,7 +197,7 @@ def index():
         c = Category.query.filter_by(name=cat).first()
         if c:
             query = query.filter_by(category_id=c.id)
-    items = query.order_by(Item.name).all()
+    items = query.order_by(Item.sort_order, Item.name).all()
     return render_template('index.html', items=items, cats=cats, q=q, selected_cat=cat)
 
 
@@ -262,8 +264,8 @@ def admin_delete_user(uid):
 @login_required
 @editor_required
 def admin_items():
-    items       = Item.query.order_by(Item.name).all()
-    cats        = Category.query.order_by(Category.name).all()
+    items       = Item.query.order_by(Item.sort_order, Item.name).all()
+    cats        = Category.query.order_by(Category.sort_order, Category.name).all()
     recent_logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(8).all()
     all_logs    = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
     return render_template('admin/items.html', items=items, cats=cats,
@@ -274,7 +276,7 @@ def admin_items():
 @login_required
 @editor_required
 def admin_add_item():
-    cats = Category.query.order_by(Category.name).all()
+    cats = Category.query.order_by(Category.sort_order, Category.name).all()
     if request.method == 'POST':
         item = Item(
             name=request.form['name'],
@@ -302,7 +304,7 @@ def admin_add_item():
 @editor_required
 def admin_edit_item(iid):
     item = Item.query.get_or_404(iid)
-    cats = Category.query.order_by(Category.name).all()
+    cats = Category.query.order_by(Category.sort_order, Category.name).all()
     if request.method == 'POST':
         item.name        = request.form['name']
         item.unit        = request.form['unit']
@@ -369,6 +371,33 @@ def stock_adjust():
 def admin_logs():
     logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
     return render_template('admin/logs.html', logs=logs)
+
+
+# ── Sort order ────────────────────────────────────────────
+@app.route('/admin/sort/items', methods=['POST'])
+@login_required
+@editor_required
+def sort_items():
+    data = request.get_json()
+    for entry in data:
+        item = Item.query.get(entry['id'])
+        if item:
+            item.sort_order = entry['order']
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/admin/sort/categories', methods=['POST'])
+@login_required
+@editor_required
+def sort_categories():
+    data = request.get_json()
+    for entry in data:
+        cat = Category.query.get(entry['id'])
+        if cat:
+            cat.sort_order = entry['order']
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 # ── Google Sheet sync ─────────────────────────────────────

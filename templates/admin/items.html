@@ -155,6 +155,7 @@
   <div class="adm-tabs">
     <button class="atab active" onclick="switchTab('items',this)">📦 品項管理</button>
     <button class="atab"        onclick="switchTab('logs',this)">📋 異動紀錄</button>
+    <button class="atab"        onclick="switchTab('sort',this)">↕️ 排序管理</button>
   </div>
 
   <!-- 品項管理 tab -->
@@ -187,7 +188,7 @@
           <td rowspan="{{ item.specs|length }}" style="font-weight:600">{{ item.name }}</td>
           {% endif %}
           <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ spec.name }}</span></td>
-          <td><span class="qty-num">{{ spec.qty }}</span></td>
+          <td><span class="qty-num" style="color:{% if ss=='out' %}var(--out){% elif ss=='low' %}var(--low){% else %}var(--ok){% endif %};font-family:'Courier New',monospace;font-size:15px;font-weight:800;letter-spacing:1px">{{ spec.qty }}</span></td>
           <td style="color:var(--text3)">{{ item.unit }}</td>
           {% if loop.first %}
           <td rowspan="{{ item.specs|length }}" style="font-size:12px;color:var(--text3)">{{ item.supplier or '—' }}</td>
@@ -229,6 +230,45 @@
       {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <!-- 排序管理 tab -->
+  <div class="tab-panel" id="panel-sort">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:4px">
+
+      <!-- 品項排序 -->
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px">品項順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（拖曳調整）</span></div>
+        <div id="sortItems" style="display:flex;flex-direction:column;gap:4px">
+          {% for item in items %}
+          <div class="sort-row" data-id="{{ item.id }}" data-type="item"
+               style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
+            <span style="color:var(--text3);font-size:14px">⠿</span>
+            <span class="cat-pill" style="flex-shrink:0">{{ item.category.name if item.category else '—' }}</span>
+            <span style="font-weight:500;font-size:13px">{{ item.name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <button onclick="saveSort('item')" style="margin-top:10px;padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存品項順序</button>
+      </div>
+
+      <!-- 類別排序 -->
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px">類別順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（拖曳調整）</span></div>
+        <div id="sortCats" style="display:flex;flex-direction:column;gap:4px">
+          {% for c in cats %}
+          <div class="sort-row" data-id="{{ c.id }}" data-type="cat"
+               style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
+            <span style="color:var(--text3);font-size:14px">⠿</span>
+            <span style="font-weight:500;font-size:13px">{{ c.name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <button onclick="saveSort('cat')" style="margin-top:10px;padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存類別順序</button>
+      </div>
+
+    </div>
+    <div id="sortMsg" style="margin-top:12px;font-size:13px;color:var(--ok);display:none">✅ 儲存成功！重新整理後生效。</div>
   </div>
 </div>
 </div>
@@ -304,6 +344,53 @@ function filterTable() {
     const mc = !cat || rc === cat;
     row.style.display = (mq && mc) ? '' : 'none';
   });
+}
+
+// ── Drag sort ──
+let dragEl = null;
+document.addEventListener('dragstart', e => {
+  if(e.target.classList.contains('sort-row')){
+    dragEl = e.target;
+    e.target.style.opacity = '0.5';
+  }
+});
+document.addEventListener('dragend', e => {
+  if(e.target.classList.contains('sort-row')){
+    e.target.style.opacity = '';
+    dragEl = null;
+  }
+});
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  const row = e.target.closest('.sort-row');
+  if(row && dragEl && row !== dragEl){
+    const container = row.parentNode;
+    const rows = [...container.querySelectorAll('.sort-row')];
+    const dragIdx = rows.indexOf(dragEl);
+    const overIdx = rows.indexOf(row);
+    if(dragIdx < overIdx) container.insertBefore(dragEl, row.nextSibling);
+    else container.insertBefore(dragEl, row);
+  }
+});
+document.querySelectorAll('.sort-row').forEach(el => {
+  el.setAttribute('draggable', true);
+});
+
+async function saveSort(type) {
+  const containerId = type === 'item' ? 'sortItems' : 'sortCats';
+  const url = type === 'item' ? '/admin/sort/items' : '/admin/sort/categories';
+  const rows = document.querySelectorAll('#' + containerId + ' .sort-row');
+  const data = [...rows].map((r, i) => ({ id: parseInt(r.dataset.id), order: i }));
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  if(res.ok){
+    const msg = document.getElementById('sortMsg');
+    msg.style.display = 'block';
+    setTimeout(() => msg.style.display = 'none', 3000);
+  }
 }
 </script>
 {% endblock %}

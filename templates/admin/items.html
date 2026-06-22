@@ -407,6 +407,17 @@ async function saveSort(type) {
     const msg = document.getElementById('sortMsg');
     msg.style.display = 'block';
     setTimeout(() => msg.style.display = 'none', 3000);
+
+    // 如果是類別排序，即時更新右側品項預覽順序
+    if(type === 'cat'){
+      const wrap = document.getElementById('sortItemsWrap');
+      const catRows = document.querySelectorAll('#sortCats .sort-row');
+      catRows.forEach(catRow => {
+        const catId = catRow.dataset.id;
+        const group = wrap.querySelector(`.sort-item-group[data-cat-id="${catId}"]`);
+        if(group) wrap.appendChild(group.parentNode);
+      });
+    }
   }
 }
 

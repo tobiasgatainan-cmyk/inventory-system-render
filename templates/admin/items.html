@@ -16,8 +16,8 @@
 
 .type-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
 .type-btn{padding:9px;border:1px solid var(--border);border-radius:var(--radius);background:white;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:5px}
-.type-btn.in-btn.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
-.type-btn.out-btn.active{background:var(--out-light);border-color:var(--out);color:var(--out)}
+.type-btn.in-btn.active{background:var(--ok-light);border-color:var(--ok);color:var(--ok)}
+.type-btn.out-btn.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
 .type-btn:not(.active):hover{background:var(--bg)}
 
 .fc{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
@@ -27,19 +27,19 @@
 .form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 
 .submit-btn{width:100%;padding:10px;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
-.in-submit{background:var(--accent);color:white}.in-submit:hover{background:var(--accent-dark)}
-.out-submit{background:var(--out);color:white}.out-submit:hover{background:#bf3d43}
+.in-submit{background:var(--ok);color:white}.in-submit:hover{background:#3d8a5c}
+.out-submit{background:var(--accent);color:white}.out-submit:hover{background:var(--accent-dark)}
 
 .recent-list{margin-top:4px}
 .recent-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
 .recent-item:last-child{border-bottom:none}
 .rbadge{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
-.rbadge.in{background:var(--accent-light)}.rbadge.out{background:var(--out-light)}
+.rbadge.in{background:var(--ok-light);color:var(--ok)}.rbadge.out{background:var(--accent-light);color:var(--accent)}
 .rinfo{flex:1;min-width:0}
 .rname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rtime{color:var(--text3);font-size:11px}
 .rqty{font-family:var(--mono);font-weight:700}
-.rqty.in{color:var(--accent)}.rqty.out{color:var(--out)}
+.rqty.in{color:var(--ok)}.rqty.out{color:var(--accent)}
 
 /* ── main ── */
 .adm-main{padding:20px;overflow-x:auto}
@@ -122,6 +122,10 @@
         <label class="fl">記錄人</label>
         <input type="text" class="fi" name="reason" id="txnPerson" placeholder="姓名／原因">
       </div>
+    </div>
+    <div class="fc">
+      <label class="fl">到期日 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
+      <input type="date" class="fi" name="expiry_date" id="txnExpiry">
     </div>
     <button type="submit" class="submit-btn in-submit" id="submitBtn">⬇️ 確認入庫</button>
   </form>
@@ -314,8 +318,16 @@ function setTxnType(t) {
   document.getElementById('btn-in').classList.toggle('active', t==='in');
   document.getElementById('btn-out').classList.toggle('active', t==='out');
   const btn = document.getElementById('submitBtn');
-  if (t === 'in') { btn.className='submit-btn in-submit'; btn.innerHTML='⬇️ 確認入庫'; }
-  else             { btn.className='submit-btn out-submit'; btn.innerHTML='⬆️ 確認出庫'; }
+  const expiryRow = document.getElementById('txnExpiry').closest('.fc');
+  if (t === 'in') {
+    btn.className='submit-btn in-submit';
+    btn.innerHTML='⬇️ 確認入庫';
+    expiryRow.style.display='';
+  } else {
+    btn.className='submit-btn out-submit';
+    btn.innerHTML='⬆️ 確認出庫';
+    expiryRow.style.display='none';  // 出庫不需要到期日
+  }
   const qtyInput = document.getElementById('txnQty');
   qtyInput.name = t === 'in' ? 'change' : '_change_neg';
 }

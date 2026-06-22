@@ -236,35 +236,47 @@
   <div class="tab-panel" id="panel-sort">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:4px">
 
-      <!-- 品項排序 -->
+      <!-- 類別排序（左） -->
       <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px">品項順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（拖曳調整）</span></div>
-        <div id="sortItems" style="display:flex;flex-direction:column;gap:4px">
-          {% for item in items %}
-          <div class="sort-row" data-id="{{ item.id }}" data-type="item"
-               style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
-            <span style="color:var(--text3);font-size:14px">⠿</span>
-            <span class="cat-pill" style="flex-shrink:0">{{ item.category.name if item.category else '—' }}</span>
-            <span style="font-weight:500;font-size:13px">{{ item.name }}</span>
-          </div>
-          {% endfor %}
-        </div>
-        <button onclick="saveSort('item')" style="margin-top:10px;padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存品項順序</button>
-      </div>
-
-      <!-- 類別排序 -->
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px">類別順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（拖曳調整）</span></div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px">類別順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（拖曳調整）</span></div>
         <div id="sortCats" style="display:flex;flex-direction:column;gap:4px">
           {% for c in cats %}
           <div class="sort-row" data-id="{{ c.id }}" data-type="cat"
-               style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
-            <span style="color:var(--text3);font-size:14px">⠿</span>
-            <span style="font-weight:500;font-size:13px">{{ c.name }}</span>
+               style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
+            <span style="color:var(--text3);font-size:16px">⠿</span>
+            <span style="font-weight:600;font-size:13px">{{ c.name }}</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto">{{ items|selectattr('category_id','eq',c.id)|list|length }} 項</span>
           </div>
           {% endfor %}
         </div>
-        <button onclick="saveSort('cat')" style="margin-top:10px;padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存類別順序</button>
+        <button onclick="saveSort('cat')" style="margin-top:12px;padding:9px 18px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存類別順序</button>
+      </div>
+
+      <!-- 品項排序（右，按類別分組） -->
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px">品項順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（同類別內拖曳調整）</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;max-height:520px;overflow-y:auto" id="sortItemsWrap">
+          {% for c in cats %}
+          {% set cat_items = items|selectattr('category_id','eq',c.id)|list %}
+          {% if cat_items %}
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--accent);padding:4px 8px;background:var(--accent-light);border-radius:6px;margin-bottom:4px;letter-spacing:.5px">
+              {{ c.name }}
+            </div>
+            <div class="sort-item-group" data-cat-id="{{ c.id }}" style="display:flex;flex-direction:column;gap:3px">
+              {% for item in cat_items %}
+              <div class="sort-row sort-item-row" data-id="{{ item.id }}" data-cat="{{ c.id }}"
+                   style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
+                <span style="color:var(--text3);font-size:14px">⠿</span>
+                <span style="font-size:13px;font-weight:500">{{ item.name }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <button onclick="saveSortItems()" style="margin-top:12px;padding:9px 18px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存品項順序</button>
       </div>
 
     </div>
@@ -363,14 +375,19 @@ document.addEventListener('dragend', e => {
 document.addEventListener('dragover', e => {
   e.preventDefault();
   const row = e.target.closest('.sort-row');
-  if(row && dragEl && row !== dragEl){
-    const container = row.parentNode;
-    const rows = [...container.querySelectorAll('.sort-row')];
-    const dragIdx = rows.indexOf(dragEl);
-    const overIdx = rows.indexOf(row);
-    if(dragIdx < overIdx) container.insertBefore(dragEl, row.nextSibling);
-    else container.insertBefore(dragEl, row);
+  if(!row || !dragEl || row === dragEl) return;
+
+  // 品項列：只能在同一類別群組內拖曳
+  if(dragEl.classList.contains('sort-item-row')){
+    if(dragEl.dataset.cat !== row.dataset.cat) return;
   }
+
+  const container = row.parentNode;
+  const rows = [...container.querySelectorAll(':scope > .sort-row')];
+  const dragIdx = rows.indexOf(dragEl);
+  const overIdx = rows.indexOf(row);
+  if(dragIdx < overIdx) container.insertBefore(dragEl, row.nextSibling);
+  else container.insertBefore(dragEl, row);
 });
 document.querySelectorAll('.sort-row').forEach(el => {
   el.setAttribute('draggable', true);
@@ -382,6 +399,21 @@ async function saveSort(type) {
   const rows = document.querySelectorAll('#' + containerId + ' .sort-row');
   const data = [...rows].map((r, i) => ({ id: parseInt(r.dataset.id), order: i }));
   const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  if(res.ok){
+    const msg = document.getElementById('sortMsg');
+    msg.style.display = 'block';
+    setTimeout(() => msg.style.display = 'none', 3000);
+  }
+}
+
+async function saveSortItems() {
+  const rows = document.querySelectorAll('#sortItemsWrap .sort-item-row');
+  const data = [...rows].map((r, i) => ({ id: parseInt(r.dataset.id), order: i }));
+  const res = await fetch('/admin/sort/items', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)

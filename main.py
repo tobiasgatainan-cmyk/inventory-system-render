@@ -197,7 +197,8 @@ def index():
         c = Category.query.filter_by(name=cat).first()
         if c:
             query = query.filter_by(category_id=c.id)
-    items = query.order_by(Item.sort_order, Item.name).all()
+    items = query.join(Category, Item.category_id == Category.id, isouter=True)\
+                 .order_by(Category.sort_order, Category.name, Item.sort_order, Item.name).all()
     return render_template('index.html', items=items, cats=cats, q=q, selected_cat=cat)
 
 
@@ -264,7 +265,8 @@ def admin_delete_user(uid):
 @login_required
 @editor_required
 def admin_items():
-    items       = Item.query.order_by(Item.sort_order, Item.name).all()
+    items       = Item.query.join(Category, Item.category_id == Category.id, isouter=True)\
+                            .order_by(Category.sort_order, Category.name, Item.sort_order, Item.name).all()
     cats        = Category.query.order_by(Category.sort_order, Category.name).all()
     recent_logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(8).all()
     all_logs    = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()

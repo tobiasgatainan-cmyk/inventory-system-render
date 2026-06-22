@@ -4,6 +4,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, timezone, timedelta
+
 TZ_TAIPEI = timezone(timedelta(hours=8))
 
 def now_tw():
@@ -76,11 +77,12 @@ class Item(db.Model):
 
 class Spec(db.Model):
     __tablename__ = 'specs'
-    id         = db.Column(db.Integer, primary_key=True)
-    item_id    = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
-    name       = db.Column(db.String(100))
-    qty        = db.Column(db.Integer, default=0)
-    safe_qty   = db.Column(db.Integer, default=0)
+    id          = db.Column(db.Integer, primary_key=True)
+    item_id     = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
+    name        = db.Column(db.String(100))
+    qty         = db.Column(db.Integer, default=0)
+    safe_qty    = db.Column(db.Integer, default=0)
+    expiry_date = db.Column(db.Date, nullable=True)
 
 
 class StockLog(db.Model):
@@ -203,7 +205,10 @@ def index():
             query = query.filter_by(category_id=c.id)
     items = query.join(Category, Item.category_id == Category.id, isouter=True)\
                  .order_by(Category.sort_order, Category.name, Item.sort_order, Item.name).all()
-    return render_template('index.html', items=items, cats=cats, q=q, selected_cat=cat)
+    today = now_tw().date()
+    today_30 = today + timedelta(days=30)
+    return render_template('index.html', items=items, cats=cats, q=q, selected_cat=cat,
+                           today=today, today_30=today_30)
 
 
 # ── Admin: Users ──────────────────────────────────────────
@@ -274,8 +279,11 @@ def admin_items():
     cats        = Category.query.order_by(Category.sort_order, Category.name).all()
     recent_logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(8).all()
     all_logs    = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
+    today       = now_tw().date()
+    today_30    = today + timedelta(days=30)
     return render_template('admin/items.html', items=items, cats=cats,
-                           recent_logs=recent_logs, all_logs=all_logs)
+                           recent_logs=recent_logs, all_logs=all_logs,
+                           today=today, today_30=today_30)
 
 
 @app.route('/admin/items/add', methods=['GET', 'POST'])
@@ -292,13 +300,20 @@ def admin_add_item():
         )
         db.session.add(item)
         db.session.flush()
-        spec_names = request.form.getlist('spec_name[]')
-        spec_qtys  = request.form.getlist('spec_qty[]')
-        spec_safes = request.form.getlist('spec_safe[]')
-        for sn, sq, ss in zip(spec_names, spec_qtys, spec_safes):
+        spec_names   = request.form.getlist('spec_name[]')
+        spec_qtys    = request.form.getlist('spec_qty[]')
+        spec_safes   = request.form.getlist('spec_safe[]')
+        spec_expiries= request.form.getlist('spec_expiry[]')
+        from datetime import date as date_type
+        for sn, sq, ss, se in zip(spec_names, spec_qtys, spec_safes, spec_expiries):
             if sn.strip():
+                exp = None
+                if se.strip():
+                    try: exp = date_type.fromisoformat(se.strip())
+                    except ValueError: pass
                 db.session.add(Spec(item_id=item.id, name=sn,
-                                    qty=int(sq or 0), safe_qty=int(ss or 0)))
+                                    qty=int(sq or 0), safe_qty=int(ss or 0),
+                                    expiry_date=exp))
         db.session.commit()
         flash('品項新增成功', 'success')
         return redirect(url_for('admin_items'))
@@ -321,13 +336,20 @@ def admin_edit_item(iid):
         for s in item.specs:
             db.session.delete(s)
         db.session.flush()
-        spec_names = request.form.getlist('spec_name[]')
-        spec_qtys  = request.form.getlist('spec_qty[]')
-        spec_safes = request.form.getlist('spec_safe[]')
-        for sn, sq, ss in zip(spec_names, spec_qtys, spec_safes):
+        spec_names   = request.form.getlist('spec_name[]')
+        spec_qtys    = request.form.getlist('spec_qty[]')
+        spec_safes   = request.form.getlist('spec_safe[]')
+        spec_expiries= request.form.getlist('spec_expiry[]')
+        from datetime import date as date_type
+        for sn, sq, ss, se in zip(spec_names, spec_qtys, spec_safes, spec_expiries):
             if sn.strip():
+                exp = None
+                if se.strip():
+                    try: exp = date_type.fromisoformat(se.strip())
+                    except ValueError: pass
                 db.session.add(Spec(item_id=item.id, name=sn,
-                                    qty=int(sq or 0), safe_qty=int(ss or 0)))
+                                    qty=int(sq or 0), safe_qty=int(ss or 0),
+                                    expiry_date=exp))
         db.session.commit()
         flash('更新成功', 'success')
         return redirect(url_for('admin_items'))
@@ -458,6 +480,7 @@ with app.app_context():
         for sql in [
             "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
             "ALTER TABLE items ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+            "ALTER TABLE specs ADD COLUMN IF NOT EXISTS expiry_date DATE",
         ]:
             try:
                 conn.execute(text(sql))

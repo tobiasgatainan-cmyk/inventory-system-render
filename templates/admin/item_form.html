@@ -43,24 +43,26 @@
         <div id="specs">
           {% if item and item.specs %}
             {% for spec in item.specs %}
-            <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-              <input type="text"   name="spec_name[]" value="{{ spec.name }}"     placeholder="規格名稱" style="flex:2">
-              <input type="number" name="spec_qty[]"  value="{{ spec.qty }}"      placeholder="數量" style="flex:1" min="0">
-              <input type="number" name="spec_safe[]" value="{{ spec.safe_qty }}" placeholder="安全庫存" style="flex:1" min="0">
+            <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
+              <input type="text"   name="spec_name[]"   value="{{ spec.name }}"     placeholder="規格名稱" style="flex:2;min-width:100px">
+              <input type="number" name="spec_qty[]"    value="{{ spec.qty }}"      placeholder="數量" style="flex:1;min-width:60px" min="0">
+              <input type="number" name="spec_safe[]"   value="{{ spec.safe_qty }}" placeholder="安全庫存" style="flex:1;min-width:60px" min="0">
+              <input type="date"   name="spec_expiry[]" value="{{ spec.expiry_date.strftime('%Y-%m-%d') if spec.expiry_date else '' }}" placeholder="到期日" style="flex:1.5;min-width:120px">
               <button type="button" class="btn btn-sm btn-danger" onclick="removeSpec(this)">✕</button>
             </div>
             {% endfor %}
           {% else %}
-            <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-              <input type="text"   name="spec_name[]" placeholder="規格名稱（如 500ml）" style="flex:2">
-              <input type="number" name="spec_qty[]"  placeholder="數量" style="flex:1" min="0">
-              <input type="number" name="spec_safe[]" placeholder="安全庫存" style="flex:1" min="0">
+            <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
+              <input type="text"   name="spec_name[]"   placeholder="規格名稱（如 500ml）" style="flex:2;min-width:100px">
+              <input type="number" name="spec_qty[]"    placeholder="數量" style="flex:1;min-width:60px" min="0">
+              <input type="number" name="spec_safe[]"   placeholder="安全庫存" style="flex:1;min-width:60px" min="0">
+              <input type="date"   name="spec_expiry[]" placeholder="到期日" style="flex:1.5;min-width:120px">
               <button type="button" class="btn btn-sm btn-danger" onclick="removeSpec(this)">✕</button>
             </div>
           {% endif %}
         </div>
         <button type="button" class="btn btn-secondary btn-sm" onclick="addSpec()" style="margin-top:4px">＋ 新增規格</button>
-        <div style="font-size:11px;color:#aaa;margin-top:4px">規格名稱 ／ 現有數量 ／ 安全庫存</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px">規格名稱 ／ 現有數量 ／ 安全庫存 ／ 到期日（選填）</div>
       </div>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
@@ -73,10 +75,11 @@
 
 <script>
 function addSpec() {
-  const row = `<div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-    <input type="text"   name="spec_name[]" placeholder="規格名稱" style="flex:2">
-    <input type="number" name="spec_qty[]"  placeholder="數量" style="flex:1" min="0">
-    <input type="number" name="spec_safe[]" placeholder="安全庫存" style="flex:1" min="0">
+  const row = `<div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
+    <input type="text"   name="spec_name[]"   placeholder="規格名稱" style="flex:2;min-width:100px">
+    <input type="number" name="spec_qty[]"    placeholder="數量" style="flex:1;min-width:60px" min="0">
+    <input type="number" name="spec_safe[]"   placeholder="安全庫存" style="flex:1;min-width:60px" min="0">
+    <input type="date"   name="spec_expiry[]" placeholder="到期日" style="flex:1.5;min-width:120px">
     <button type="button" class="btn btn-sm btn-danger" onclick="removeSpec(this)">✕</button>
   </div>`;
   document.getElementById('specs').insertAdjacentHTML('beforeend', row);

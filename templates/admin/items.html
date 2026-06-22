@@ -180,7 +180,7 @@
     <div style="overflow-x:auto">
     <table class="data-table" id="itemTable">
       <thead>
-        <tr><th>類別</th><th>品項名稱</th><th>規格</th><th>現有庫存</th><th>單位</th><th>供應商</th><th style="text-align:right">操作</th></tr>
+        <tr><th>類別</th><th>品項名稱</th><th>規格</th><th>現有庫存</th><th>到期日</th><th>單位</th><th>供應商</th><th style="text-align:right">操作</th></tr>
       </thead>
       <tbody>
       {% for item in items %}
@@ -193,6 +193,9 @@
           {% endif %}
           <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ spec.name }}</span></td>
           <td><span class="qty-num" style="color:{% if ss=='out' %}var(--out){% elif ss=='low' %}var(--low){% else %}var(--ok){% endif %};font-weight:700;font-size:14px">{{ spec.qty }}</span></td>
+          <td style="font-size:12px;color:{% if spec.expiry_date and spec.expiry_date <= today %}var(--out){% elif spec.expiry_date and spec.expiry_date <= today_30 %}var(--low){% else %}var(--text3){% endif %}">
+            {{ spec.expiry_date.strftime('%Y-%m-%d') if spec.expiry_date else '—' }}
+          </td>
           <td style="color:var(--text3)">{{ item.unit }}</td>
           {% if loop.first %}
           <td rowspan="{{ item.specs|length }}" style="font-size:12px;color:var(--text3)">{{ item.supplier or '—' }}</td>
@@ -222,11 +225,17 @@
       </thead>
       <tbody>
       {% for log in all_logs %}
-      <tr>
+      <tr style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(217,79,85,.06){% endif %}">
         <td style="color:var(--text3);white-space:nowrap;font-size:12px">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
         <td style="font-weight:600">{{ log.spec.item.name if log.spec else '—' }}</td>
         <td style="font-size:12px;color:var(--text2)">{{ log.spec.name if log.spec else '—' }}</td>
-        <td class="{{ 'chg-pos' if log.change > 0 else 'chg-neg' }}">{{ '+' if log.change > 0 else '' }}{{ log.change }}</td>
+        <td>
+          <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;
+            background:{% if log.change > 0 %}var(--ok-light){% else %}var(--out-light){% endif %};
+            color:{% if log.change > 0 %}var(--ok){% else %}var(--out){% endif %}">
+            {{ '+' if log.change > 0 else '' }}{{ log.change }}
+          </span>
+        </td>
         <td style="font-size:12px;color:var(--text3)">{{ log.reason or '—' }}</td>
       </tr>
       {% else %}

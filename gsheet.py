@@ -1,10 +1,5 @@
 """
 gsheet.py  ── Google Sheets 雙向同步
-設定方式：
-  1. 在 Google Cloud Console 建立 Service Account，下載 JSON key
-  2. 把 JSON key 的內容存成 Render 環境變數 GOOGLE_SERVICE_ACCOUNT_JSON
-  3. 把試算表 ID 存成環境變數 GOOGLE_SHEET_ID
-  4. 把試算表分享給 Service Account 的 email（編輯者權限）
 """
 import os
 import json
@@ -45,13 +40,39 @@ def _get_sheet(tab_name: str):
 
 
 # ── Full sync: write all items to "庫存" tab ──────────────
+# 只有數量有變化的品項才更新「最後同步」時間
 def full_sync():
-    from main import Item, Spec  # lazy import to avoid circular
+    from main import Item, Spec
     ws = _get_sheet('庫存')
+
+    # 讀取現有 Sheet 資料，建立 {(品項,規格): (數量, 最後同步)} 的對照表
+    existing = {}
+    try:
+        records = ws.get_all_records()
+        for r in records:
+            key = (str(r.get('品項','')).strip(), str(r.get('規格','')).strip())
+            existing[key] = {
+                'qty': r.get('數量', ''),
+                'last_sync': r.get('最後同步', '')
+            }
+    except Exception:
+        pass
+
+    now = now_tw().strftime('%Y-%m-%d %H:%M')
     rows = [['品項', '規格', '單位', '數量', '安全庫存', '供應商', '分類', '最後同步']]
-    now  = now_tw().strftime('%Y-%m-%d %H:%M')
-    for item in Item.query.order_by(Item.name).all():
+
+    for item in Item.query.join(
+            __import__('main').Category, Item.category_id == __import__('main').Category.id, isouter=True
+        ).order_by(__import__('main').Category.sort_order, Item.sort_order, Item.name).all():
         for spec in item.specs:
+            key = (item.name, spec.name)
+            old = existing.get(key, {})
+            # 只有數量有變化才更新同步時間
+            try:
+                old_qty = int(old.get('qty', -999))
+            except (ValueError, TypeError):
+                old_qty = -999
+            last_sync = now if old_qty != spec.qty else (old.get('last_sync') or now)
             rows.append([
                 item.name,
                 spec.name,
@@ -60,8 +81,9 @@ def full_sync():
                 spec.safe_qty,
                 item.supplier or '',
                 item.category.name if item.category else '',
-                now,
+                last_sync,
             ])
+
     ws.clear()
     ws.update('A1', rows)
     return f'已寫入 {len(rows)-1} 筆'
@@ -71,7 +93,6 @@ def full_sync():
 def append_log_row(spec, change: int, reason: str, username: str):
     ws  = _get_sheet('異動紀錄')
     now = now_tw().strftime('%Y-%m-%d %H:%M:%S')
-    # Ensure header
     if ws.row_count < 1 or ws.cell(1, 1).value != '時間':
         ws.insert_row(['時間', '品項', '規格', '異動', '理由', '操作人'], index=1)
     ws.append_row([
@@ -86,26 +107,71 @@ def append_log_row(spec, change: int, reason: str, username: str):
 
 # ── Import from Sheet back to DB ──────────────────────────
 def import_from_sheet():
-    """Read '庫存' tab and upsert into DB (qty + safe_qty only)."""
-    from main import db, Item, Spec, Category
-    ws   = _get_sheet('庫存')
-    rows = ws.get_all_records()
+    """
+    讀取「庫存」分頁，把數量和安全庫存寫回資料庫。
+    只更新有變化的欄位，並記錄匯入異動紀錄。
+    回傳 (updated_count, skipped_count, errors)
+    """
+    from main import db, Item, Spec, StockLog, now_tw as main_now_tw
+
+    ws = _get_sheet('庫存')
+    records = ws.get_all_records()
+
     updated = 0
-    for row in rows:
+    skipped = 0
+    errors  = []
+
+    for row in records:
         item_name = str(row.get('品項', '')).strip()
         spec_name = str(row.get('規格', '')).strip()
         if not item_name:
             continue
+
         item = Item.query.filter_by(name=item_name).first()
         if not item:
+            errors.append(f'找不到品項：{item_name}')
             continue
+
         spec = Spec.query.filter_by(item_id=item.id, name=spec_name).first()
-        if spec:
-            try:
-                spec.qty      = int(row.get('數量', spec.qty))
-                spec.safe_qty = int(row.get('安全庫存', spec.safe_qty))
-                updated += 1
-            except ValueError:
-                pass
+        if not spec:
+            errors.append(f'找不到規格：{item_name} / {spec_name}')
+            continue
+
+        try:
+            new_qty      = int(row.get('數量', spec.qty))
+            new_safe_qty = int(row.get('安全庫存', spec.safe_qty))
+        except (ValueError, TypeError):
+            errors.append(f'數量格式錯誤：{item_name} / {spec_name}')
+            continue
+
+        changed = False
+        if new_qty != spec.qty:
+            diff = new_qty - spec.qty
+            # 記錄異動
+            log = StockLog(
+                spec_id=spec.id,
+                change=diff,
+                reason='從 Google Sheet 匯入',
+                user_id=None
+            )
+            db.session.add(log)
+            spec.qty = new_qty
+            changed = True
+
+        if new_safe_qty != spec.safe_qty:
+            spec.safe_qty = new_safe_qty
+            changed = True
+
+        if changed:
+            updated += 1
+        else:
+            skipped += 1
+
     db.session.commit()
-    return f'已更新 {updated} 筆規格'
+
+    msg = f'已更新 {updated} 筆'
+    if skipped:
+        msg += f'，{skipped} 筆無變化略過'
+    if errors:
+        msg += f'，{len(errors)} 筆錯誤：' + '；'.join(errors[:3])
+    return msg

@@ -420,6 +420,19 @@ def gsheet_sync():
     return redirect(url_for('admin_items'))
 
 
+@app.route('/admin/gsheet/import', methods=['POST'])
+@login_required
+@admin_required
+def gsheet_import():
+    try:
+        from gsheet import import_from_sheet
+        result = import_from_sheet()
+        flash(f'從 Sheet 匯入完成：{result}', 'success')
+    except Exception as e:
+        flash(f'匯入失敗：{e}', 'danger')
+    return redirect(url_for('admin_items'))
+
+
 # ── API: low-stock check ──────────────────────────────────
 @app.route('/api/low-stock')
 @login_required

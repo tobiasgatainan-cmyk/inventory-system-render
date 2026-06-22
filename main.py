@@ -372,11 +372,21 @@ def admin_delete_item(iid):
 @login_required
 @editor_required
 def stock_adjust():
+    from datetime import date as date_type
     spec_id = int(request.form['spec_id'])
     change  = int(request.form['change'])
     reason  = request.form.get('reason', '')
     spec    = Spec.query.get_or_404(spec_id)
     spec.qty += change
+
+    # 更新到期日（只有入庫且有填寫時才更新）
+    expiry_str = request.form.get('expiry_date', '').strip()
+    if expiry_str and change > 0:
+        try:
+            spec.expiry_date = date_type.fromisoformat(expiry_str)
+        except ValueError:
+            pass
+
     log = StockLog(spec_id=spec_id, change=change,
                    reason=reason, user_id=current_user.id)
     db.session.add(log)

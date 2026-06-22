@@ -8,7 +8,12 @@ gsheet.py  ── Google Sheets 雙向同步
 """
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+TZ_TAIPEI = timezone(timedelta(hours=8))
+
+def now_tw():
+    return datetime.now(TZ_TAIPEI)
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -44,7 +49,7 @@ def full_sync():
     from main import Item, Spec  # lazy import to avoid circular
     ws = _get_sheet('庫存')
     rows = [['品項', '規格', '單位', '數量', '安全庫存', '供應商', '分類', '最後同步']]
-    now  = datetime.now().strftime('%Y-%m-%d %H:%M')
+    now  = now_tw().strftime('%Y-%m-%d %H:%M')
     for item in Item.query.order_by(Item.name).all():
         for spec in item.specs:
             rows.append([
@@ -65,7 +70,7 @@ def full_sync():
 # ── Append a single log row to "異動紀錄" tab ─────────────
 def append_log_row(spec, change: int, reason: str, username: str):
     ws  = _get_sheet('異動紀錄')
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    now = now_tw().strftime('%Y-%m-%d %H:%M:%S')
     # Ensure header
     if ws.row_count < 1 or ws.cell(1, 1).value != '時間':
         ws.insert_row(['時間', '品項', '規格', '異動', '理由', '操作人'], index=1)

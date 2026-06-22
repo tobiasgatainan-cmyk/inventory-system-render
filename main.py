@@ -3,7 +3,11 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user, AnonymousUserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+TZ_TAIPEI = timezone(timedelta(hours=8))
+
+def now_tw():
+    return datetime.now(TZ_TAIPEI).replace(tzinfo=None)
 import os
 import json
 
@@ -41,7 +45,7 @@ class User(UserMixin, db.Model):
     email    = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(256), nullable=False)
     role     = db.Column(db.String(20), default='viewer')  # admin / editor / viewer
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_tw)
 
     def is_admin(self):
         return self.role == 'admin'
@@ -66,7 +70,7 @@ class Item(db.Model):
     supplier    = db.Column(db.String(100))
     sort_order  = db.Column(db.Integer, default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=now_tw)
     specs       = db.relationship('Spec', backref='item', lazy=True, cascade='all, delete-orphan')
 
 
@@ -86,7 +90,7 @@ class StockLog(db.Model):
     change     = db.Column(db.Integer)          # +入庫 / -出庫
     reason     = db.Column(db.String(200))
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_tw)
     user       = db.relationship('User', backref='logs')
     spec       = db.relationship('Spec', backref='logs')
 

@@ -322,11 +322,9 @@ function setTxnType(t) {
   if (t === 'in') {
     btn.className='submit-btn in-submit';
     btn.innerHTML='⬇️ 確認入庫';
-    expiryRow.style.display='';
   } else {
     btn.className='submit-btn out-submit';
     btn.innerHTML='⬆️ 確認出庫';
-    expiryRow.style.display='none';  // 出庫不需要到期日
   }
   const qtyInput = document.getElementById('txnQty');
   qtyInput.name = t === 'in' ? 'change' : '_change_neg';

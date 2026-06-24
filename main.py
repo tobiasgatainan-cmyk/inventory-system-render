@@ -3,17 +3,16 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user, AnonymousUserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from datetime import datetime, timezone, timedelta
-
-TZ_TAIPEI = timezone(timedelta(hours=8))
-
-def now_tw():
-    return datetime.now(TZ_TAIPEI).replace(tzinfo=None)
+from datetime import datetime, timezone, timedelta, date as date_type
 import os
 import json
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-prod')
+
+TZ_TAIPEI = timezone(timedelta(hours=8))
+def now_tw():
+    return datetime.now(TZ_TAIPEI).replace(tzinfo=None)
 
 # ── Database ──────────────────────────────────────────────
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///inventory.db')
@@ -29,11 +28,9 @@ login_manager.login_view = 'login'
 login_manager.login_message = '請先登入'
 login_manager.login_message_category = 'info'
 
-# Allow anonymous access — only routes with @login_required are protected
 @login_manager.unauthorized_handler
 def unauthorized():
     from flask import request as req
-    # Only redirect to login for admin routes
     if req.path.startswith('/admin') or req.path.startswith('/stock'):
         return redirect(url_for('login', next=req.path))
     return redirect(url_for('login'))
@@ -41,18 +38,27 @@ def unauthorized():
 # ── Models ────────────────────────────────────────────────
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
-    id       = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email    = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(256), nullable=False)
-    role     = db.Column(db.String(20), default='viewer')  # admin / editor / viewer
+    id         = db.Column(db.Integer, primary_key=True)
+    username   = db.Column(db.String(80), unique=True, nullable=False)
+    email      = db.Column(db.String(120), unique=True, nullable=False)
+    password   = db.Column(db.String(256), nullable=False)
+    role       = db.Column(db.String(20), default='viewer')
     created_at = db.Column(db.DateTime, default=now_tw)
 
-    def is_admin(self):
-        return self.role == 'admin'
+    def is_admin(self):  return self.role == 'admin'
+    def can_edit(self):  return self.role in ('admin', 'editor')
 
-    def can_edit(self):
-        return self.role in ('admin', 'editor')
+
+class AnonymousUser(AnonymousUserMixin):
+    def is_admin(self):  return False
+    def can_edit(self):  return False
+    username = ''; role = ''
+
+login_manager.anonymous_user = AnonymousUser
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 
 class Category(db.Model):
@@ -72,46 +78,81 @@ class Item(db.Model):
     sort_order  = db.Column(db.Integer, default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
     created_at  = db.Column(db.DateTime, default=now_tw)
-    specs       = db.relationship('Spec', backref='item', lazy=True, cascade='all, delete-orphan')
+    brands      = db.relationship('Brand', backref='item', lazy=True, cascade='all, delete-orphan')
+
+    @property
+    def total_qty(self):
+        return sum(b.total_qty for b in self.brands)
+
+    @property
+    def status(self):
+        """ok / low / out"""
+        total = self.total_qty
+        safe  = sum(b.safe_qty for b in self.brands)
+        if total == 0: return 'out'
+        if total <= safe: return 'low'
+        return 'ok'
+
+
+class Brand(db.Model):
+    __tablename__ = 'brands'
+    id         = db.Column(db.Integer, primary_key=True)
+    item_id    = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
+    name       = db.Column(db.String(100), nullable=False)
+    safe_qty   = db.Column(db.Integer, default=0)
+    sort_order = db.Column(db.Integer, default=0)
+    specs      = db.relationship('Spec', backref='brand', lazy=True, cascade='all, delete-orphan')
+
+    @property
+    def total_qty(self):
+        return sum(s.total_qty for s in self.specs)
 
 
 class Spec(db.Model):
     __tablename__ = 'specs'
+    id         = db.Column(db.Integer, primary_key=True)
+    brand_id   = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
+    name       = db.Column(db.String(100))
+    sort_order = db.Column(db.Integer, default=0)
+    batches    = db.relationship('Batch', backref='spec', lazy=True, cascade='all, delete-orphan')
+
+    @property
+    def total_qty(self):
+        return sum(b.qty for b in self.batches)
+
+    @property
+    def status(self):
+        total = self.total_qty
+        safe  = self.brand.safe_qty if self.brand else 0
+        if total == 0: return 'out'
+        if total <= safe: return 'low'
+        return 'ok'
+
+
+class Batch(db.Model):
+    __tablename__ = 'batches'
     id          = db.Column(db.Integer, primary_key=True)
-    item_id     = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
-    name        = db.Column(db.String(100))
+    spec_id     = db.Column(db.Integer, db.ForeignKey('specs.id'), nullable=False)
     qty         = db.Column(db.Integer, default=0)
-    safe_qty    = db.Column(db.Integer, default=0)
     expiry_date = db.Column(db.Date, nullable=True)
+    cost_price  = db.Column(db.Numeric(10, 2), nullable=True)   # 進價
+    note        = db.Column(db.String(200), nullable=True)       # 備註
+    created_at  = db.Column(db.DateTime, default=now_tw)
 
 
 class StockLog(db.Model):
     __tablename__ = 'stock_logs'
     id         = db.Column(db.Integer, primary_key=True)
-    spec_id    = db.Column(db.Integer, db.ForeignKey('specs.id'))
-    change     = db.Column(db.Integer)          # +入庫 / -出庫
+    batch_id   = db.Column(db.Integer, db.ForeignKey('batches.id'))
+    change     = db.Column(db.Integer)
     reason     = db.Column(db.String(200))
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=now_tw)
     user       = db.relationship('User', backref='logs')
-    spec       = db.relationship('Spec', backref='logs')
+    batch      = db.relationship('Batch', backref='logs')
 
 
 # ── Helpers ───────────────────────────────────────────────
-class AnonymousUser(AnonymousUserMixin):
-    def is_admin(self):
-        return False
-    def can_edit(self):
-        return False
-    username = ''
-    role = ''
-
-login_manager.anonymous_user = AnonymousUser
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -132,44 +173,45 @@ def editor_required(f):
 
 
 def seed_data():
-    """Insert sample data if DB is empty."""
-    if User.query.first():
-        return
+    if User.query.first(): return
     admin = User(username='admin', email='admin@example.com',
                  password=generate_password_hash('admin1234'), role='admin')
     db.session.add(admin)
 
-    cats = ['文具', '清潔', '電腦設備', '茶水間']
+    cats_data = ['文具', '清潔', '電腦設備', '茶水間']
     cat_objs = {}
-    for c in cats:
-        obj = Category(name=c)
-        db.session.add(obj)
-        cat_objs[c] = obj
+    for i, c in enumerate(cats_data):
+        obj = Category(name=c, sort_order=i)
+        db.session.add(obj); cat_objs[c] = obj
     db.session.flush()
 
     sample = [
-        ('A4 影印紙', '包', 'ABC紙業', '文具',  [('白色 80g', 24, 5)]),
-        ('Kokuyo 膠帶', '捲', 'OO批發', '文具',  [('透明', 3, 5)]),
-        ('黑色原子筆', '盒', 'XYZ文具', '文具',  [('0.5mm', 0, 3)]),
-        ('75% 酒精噴劑', '瓶', '清潔用品廠', '清潔', [('500ml', 8, 4)]),
-        ('濕紙巾', '包', '日用品店', '清潔', [('一般型', 12, 3)]),
-        ('無線滑鼠', '個', '電子產品城', '電腦設備', [('黑色', 2, 1)]),
-        ('USB-C 集線器', '個', '電子商城', '電腦設備', [('4 port', 0, 2)]),
-        ('咖啡膠囊', '顆', '咖啡商', '茶水間', [('深焙', 45, 20)]),
-        ('紙杯', '包', '飲料用品', '茶水間', [('標準', 2, 5)]),
-        ('訂書針', '盒', '文具批發', '文具', [('10號', 7, 2)]),
+        ('A4 影印紙',    '包', 'ABC紙業',   '文具',   [('ABC紙業', [('白色 80g', 24)], 5)]),
+        ('Kokuyo 膠帶',  '捲', 'OO批發',    '文具',   [('Kokuyo',  [('透明',    3 )], 5)]),
+        ('黑色原子筆',   '盒', 'XYZ文具',   '文具',   [('斑馬',    [('0.5mm',   0 )], 3)]),
+        ('75% 酒精噴劑', '瓶', '清潔用品廠', '清潔',  [('金門',    [('500ml',   8 )], 4)]),
+        ('濕紙巾',       '包', '日用品店',  '清潔',   [('舒潔',    [('一般型',  12)], 3)]),
+        ('無線滑鼠',     '個', '電子產品城', '電腦設備',[('羅技',   [('黑色',    2 )], 1)]),
+        ('USB-C 集線器', '個', '電子商城',  '電腦設備',[('Anker',   [('4 port',  0 )], 2)]),
+        ('咖啡膠囊',     '顆', '咖啡商',    '茶水間', [('Nespresso',[('深焙',   45)], 20)]),
+        ('紙杯',         '包', '飲料用品',  '茶水間', [('大林',    [('標準',    2 )], 5)]),
+        ('訂書針',       '盒', '文具批發',  '文具',   [('美克司',  [('10號',    7 )], 2)]),
     ]
-    for name, unit, supplier, cat, specs in sample:
-        item = Item(name=name, unit=unit, supplier=supplier,
-                    category=cat_objs[cat])
-        db.session.add(item)
-        db.session.flush()
-        for sname, qty, safe in specs:
-            db.session.add(Spec(item_id=item.id, name=sname, qty=qty, safe_qty=safe))
+    for name, unit, supplier, cat, brands in sample:
+        item = Item(name=name, unit=unit, supplier=supplier, category=cat_objs[cat])
+        db.session.add(item); db.session.flush()
+        for bi, (bname, specs, safe) in enumerate(brands):
+            brand = Brand(item_id=item.id, name=bname, safe_qty=safe, sort_order=bi)
+            db.session.add(brand); db.session.flush()
+            for si, (sname, qty) in enumerate(specs):
+                spec = Spec(brand_id=brand.id, name=sname, sort_order=si)
+                db.session.add(spec); db.session.flush()
+                batch = Batch(spec_id=spec.id, qty=qty)
+                db.session.add(batch)
     db.session.commit()
 
 
-# ── Auth routes ───────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -182,7 +224,6 @@ def login():
         flash('帳號或密碼錯誤', 'danger')
     return render_template('login.html')
 
-
 @app.route('/logout')
 @login_required
 def logout():
@@ -190,25 +231,48 @@ def logout():
     return redirect(url_for('index'))
 
 
-# ── Main inventory view (public) ─────────────────────────
+# ── Main inventory view ───────────────────────────────────
 @app.route('/')
 def index():
     q    = request.args.get('q', '')
     cat  = request.args.get('cat', '')
     cats = Category.query.order_by(Category.sort_order, Category.name).all()
-    query = Item.query
+    query = Item.query.join(Category, Item.category_id == Category.id, isouter=True)
     if q:
         query = query.filter(Item.name.ilike(f'%{q}%'))
     if cat:
         c = Category.query.filter_by(name=cat).first()
         if c:
-            query = query.filter_by(category_id=c.id)
-    items = query.join(Category, Item.category_id == Category.id, isouter=True)\
-                 .order_by(Category.sort_order, Category.name, Item.sort_order, Item.name).all()
-    today = now_tw().date()
+            query = query.filter(Item.category_id == c.id)
+    items = query.order_by(Category.sort_order, Category.name, Item.sort_order, Item.name).all()
+    today    = now_tw().date()
     today_30 = today + timedelta(days=30)
-    return render_template('index.html', items=items, cats=cats, q=q, selected_cat=cat,
-                           today=today, today_30=today_30)
+    return render_template('index.html', items=items, cats=cats, q=q,
+                           selected_cat=cat, today=today, today_30=today_30)
+
+
+# ── API: item detail for card expand ─────────────────────
+@app.route('/api/item/<int:iid>')
+def api_item_detail(iid):
+    item  = Item.query.get_or_404(iid)
+    today = now_tw().date()
+    result = []
+    for brand in item.brands:
+        for spec in brand.specs:
+            for batch in spec.batches:
+                exp = batch.expiry_date.isoformat() if batch.expiry_date else None
+                days_left = (batch.expiry_date - today).days if batch.expiry_date else None
+                result.append({
+                    'batch_id':    batch.id,
+                    'brand':       brand.name,
+                    'spec':        spec.name,
+                    'qty':         batch.qty,
+                    'expiry_date': exp,
+                    'days_left':   days_left,
+                    'note':        batch.note or '',
+                    'unit':        item.unit,
+                })
+    return jsonify({'item': item.name, 'unit': item.unit, 'batches': result})
 
 
 # ── Admin: Users ──────────────────────────────────────────
@@ -219,7 +283,6 @@ def admin_users():
     users = User.query.order_by(User.created_at).all()
     return render_template('admin/users.html', users=users)
 
-
 @app.route('/admin/users/add', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -228,16 +291,13 @@ def admin_add_user():
         if User.query.filter_by(username=request.form['username']).first():
             flash('帳號已存在', 'danger')
         else:
-            u = User(username=request.form['username'],
-                     email=request.form['email'],
+            u = User(username=request.form['username'], email=request.form['email'],
                      password=generate_password_hash(request.form['password']),
                      role=request.form['role'])
-            db.session.add(u)
-            db.session.commit()
+            db.session.add(u); db.session.commit()
             flash('新增成功', 'success')
             return redirect(url_for('admin_users'))
     return render_template('admin/user_form.html', user=None)
-
 
 @app.route('/admin/users/<int:uid>/edit', methods=['GET', 'POST'])
 @login_required
@@ -249,11 +309,9 @@ def admin_edit_user(uid):
         u.role  = request.form['role']
         if request.form.get('password'):
             u.password = generate_password_hash(request.form['password'])
-        db.session.commit()
-        flash('更新成功', 'success')
+        db.session.commit(); flash('更新成功', 'success')
         return redirect(url_for('admin_users'))
     return render_template('admin/user_form.html', user=u)
-
 
 @app.route('/admin/users/<int:uid>/delete', methods=['POST'])
 @login_required
@@ -263,13 +321,11 @@ def admin_delete_user(uid):
     if u.id == current_user.id:
         flash('無法刪除自己', 'danger')
     else:
-        db.session.delete(u)
-        db.session.commit()
-        flash('已刪除', 'success')
+        db.session.delete(u); db.session.commit(); flash('已刪除', 'success')
     return redirect(url_for('admin_users'))
 
 
-# ── Admin: Items CRUD ─────────────────────────────────────
+# ── Admin: Items ──────────────────────────────────────────
 @app.route('/admin/items')
 @login_required
 @editor_required
@@ -285,40 +341,20 @@ def admin_items():
                            recent_logs=recent_logs, all_logs=all_logs,
                            today=today, today_30=today_30)
 
-
 @app.route('/admin/items/add', methods=['GET', 'POST'])
 @login_required
 @editor_required
 def admin_add_item():
     cats = Category.query.order_by(Category.sort_order, Category.name).all()
     if request.method == 'POST':
-        item = Item(
-            name=request.form['name'],
-            unit=request.form['unit'],
-            supplier=request.form['supplier'],
-            category_id=int(request.form['category_id']) if request.form['category_id'] else None
-        )
-        db.session.add(item)
-        db.session.flush()
-        spec_names   = request.form.getlist('spec_name[]')
-        spec_qtys    = request.form.getlist('spec_qty[]')
-        spec_safes   = request.form.getlist('spec_safe[]')
-        spec_expiries= request.form.getlist('spec_expiry[]')
-        from datetime import date as date_type
-        for sn, sq, ss, se in zip(spec_names, spec_qtys, spec_safes, spec_expiries):
-            if sn.strip():
-                exp = None
-                if se.strip():
-                    try: exp = date_type.fromisoformat(se.strip())
-                    except ValueError: pass
-                db.session.add(Spec(item_id=item.id, name=sn,
-                                    qty=int(sq or 0), safe_qty=int(ss or 0),
-                                    expiry_date=exp))
-        db.session.commit()
-        flash('品項新增成功', 'success')
+        item = Item(name=request.form['name'], unit=request.form['unit'],
+                    supplier=request.form['supplier'],
+                    category_id=int(request.form['category_id']) if request.form['category_id'] else None)
+        db.session.add(item); db.session.flush()
+        _save_brands(item.id, request.form)
+        db.session.commit(); flash('品項新增成功', 'success')
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=None, cats=cats)
-
 
 @app.route('/admin/items/<int:iid>/edit', methods=['GET', 'POST'])
 @login_required
@@ -331,78 +367,175 @@ def admin_edit_item(iid):
         item.unit        = request.form['unit']
         item.supplier    = request.form['supplier']
         item.category_id = int(request.form['category_id']) if request.form['category_id'] else None
-
-        # rebuild specs
-        for s in item.specs:
-            db.session.delete(s)
+        for brand in item.brands: db.session.delete(brand)
         db.session.flush()
-        spec_names   = request.form.getlist('spec_name[]')
-        spec_qtys    = request.form.getlist('spec_qty[]')
-        spec_safes   = request.form.getlist('spec_safe[]')
-        spec_expiries= request.form.getlist('spec_expiry[]')
-        from datetime import date as date_type
-        for sn, sq, ss, se in zip(spec_names, spec_qtys, spec_safes, spec_expiries):
-            if sn.strip():
-                exp = None
-                if se.strip():
-                    try: exp = date_type.fromisoformat(se.strip())
-                    except ValueError: pass
-                db.session.add(Spec(item_id=item.id, name=sn,
-                                    qty=int(sq or 0), safe_qty=int(ss or 0),
-                                    expiry_date=exp))
-        db.session.commit()
-        flash('更新成功', 'success')
+        _save_brands(item.id, request.form)
+        db.session.commit(); flash('更新成功', 'success')
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=item, cats=cats)
 
+def _save_brands(item_id, form):
+    brand_names  = form.getlist('brand_name[]')
+    brand_safes  = form.getlist('brand_safe[]')
+    spec_names   = form.getlist('spec_name[]')
+    spec_qtys    = form.getlist('spec_qty[]')
+    spec_expiries= form.getlist('spec_expiry[]')
+    spec_costs   = form.getlist('spec_cost[]')
+    spec_notes   = form.getlist('spec_note[]')
+    brand_indices= form.getlist('spec_brand_index[]')  # which brand each spec belongs to
+
+    brands_created = []
+    for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
+        if not bname.strip(): continue
+        brand = Brand(item_id=item_id, name=bname.strip(),
+                      safe_qty=int(bsafe or 0), sort_order=bi)
+        db.session.add(brand); db.session.flush()
+        brands_created.append(brand)
+
+    for si, (sname, sqty, sexp, scost, snote, bidx) in enumerate(
+            zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_notes, brand_indices)):
+        if not sname.strip(): continue
+        try: bidx = int(bidx)
+        except (ValueError, TypeError): bidx = 0
+        if bidx >= len(brands_created): continue
+        spec = Spec(brand_id=brands_created[bidx].id, name=sname.strip(), sort_order=si)
+        db.session.add(spec); db.session.flush()
+        exp = None
+        if sexp.strip():
+            try: exp = date_type.fromisoformat(sexp.strip())
+            except ValueError: pass
+        cost = None
+        if scost.strip():
+            try: cost = float(scost.strip())
+            except ValueError: pass
+        batch = Batch(spec_id=spec.id, qty=int(sqty or 0),
+                      expiry_date=exp, cost_price=cost, note=snote.strip() or None)
+        db.session.add(batch)
 
 @app.route('/admin/items/<int:iid>/delete', methods=['POST'])
 @login_required
 @editor_required
 def admin_delete_item(iid):
     item = Item.query.get_or_404(iid)
-    db.session.delete(item)
-    db.session.commit()
-    flash('已刪除', 'success')
+    db.session.delete(item); db.session.commit(); flash('已刪除', 'success')
     return redirect(url_for('admin_items'))
 
 
-# ── Stock in/out ──────────────────────────────────────────
-@app.route('/stock/adjust', methods=['POST'])
+# ── Stock in ──────────────────────────────────────────────
+@app.route('/stock/in', methods=['POST'])
 @login_required
 @editor_required
-def stock_adjust():
-    from datetime import date as date_type
-    spec_id = int(request.form['spec_id'])
-    change  = int(request.form['change'])
-    reason  = request.form.get('reason', '')
-    spec    = Spec.query.get_or_404(spec_id)
-    spec.qty += change
+def stock_in():
+    spec_id  = int(request.form['spec_id'])
+    qty      = int(request.form['qty'])
+    reason   = request.form.get('reason', '')
+    exp_str  = request.form.get('expiry_date', '').strip()
+    cost_str = request.form.get('cost_price', '').strip()
+    note     = request.form.get('note', '').strip()
 
-    # 更新到期日（只有入庫且有填寫時才更新）
-    expiry_str = request.form.get('expiry_date', '').strip()
-    if expiry_str and change > 0:
-        try:
-            spec.expiry_date = date_type.fromisoformat(expiry_str)
-        except ValueError:
-            pass
+    spec = Spec.query.get_or_404(spec_id)
 
-    log = StockLog(spec_id=spec_id, change=change,
-                   reason=reason, user_id=current_user.id)
-    db.session.add(log)
-    db.session.commit()
+    exp = None
+    if exp_str:
+        try: exp = date_type.fromisoformat(exp_str)
+        except ValueError: pass
+    cost = None
+    if cost_str:
+        try: cost = float(cost_str)
+        except ValueError: pass
 
-    # Optional: sync to Google Sheet
+    # Try to merge with existing batch of same expiry (or no expiry)
+    existing = None
+    for b in spec.batches:
+        if b.expiry_date == exp:
+            existing = b; break
+
+    if existing:
+        existing.qty += qty
+        if cost: existing.cost_price = cost
+        if note: existing.note = note
+        batch = existing
+    else:
+        batch = Batch(spec_id=spec_id, qty=qty, expiry_date=exp,
+                      cost_price=cost, note=note or None)
+        db.session.add(batch); db.session.flush()
+
+    log = StockLog(batch_id=batch.id, change=qty, reason=reason, user_id=current_user.id)
+    db.session.add(log); db.session.commit()
+
     try:
         from gsheet import append_log_row
-        append_log_row(spec, change, reason, current_user.username)
-    except Exception:
-        pass
+        append_log_row(batch, qty, reason, current_user.username)
+    except Exception: pass
 
-    flash(f'庫存已更新（{"+" if change > 0 else ""}{change}）', 'success')
-    return redirect(request.referrer or url_for('index'))
+    flash(f'入庫成功（+{qty}）', 'success')
+    return redirect(request.referrer or url_for('admin_items'))
 
 
+# ── Stock out ─────────────────────────────────────────────
+@app.route('/stock/out', methods=['POST'])
+@login_required
+@editor_required
+def stock_out():
+    batch_id = int(request.form['batch_id'])
+    qty      = int(request.form['qty'])
+    reason   = request.form.get('reason', '')
+
+    batch = Batch.query.get_or_404(batch_id)
+    if qty > batch.qty:
+        flash(f'出庫數量不可超過現有庫存（{batch.qty}）', 'danger')
+        return redirect(request.referrer or url_for('admin_items'))
+
+    batch.qty -= qty
+    log = StockLog(batch_id=batch_id, change=-qty, reason=reason, user_id=current_user.id)
+    db.session.add(log); db.session.commit()
+
+    try:
+        from gsheet import append_log_row
+        append_log_row(batch, -qty, reason, current_user.username)
+    except Exception: pass
+
+    flash(f'出庫成功（-{qty}）', 'success')
+    return redirect(request.referrer or url_for('admin_items'))
+
+
+# ── API for dropdowns ─────────────────────────────────────
+@app.route('/api/items_by_cat/<int:cat_id>')
+@login_required
+def api_items_by_cat(cat_id):
+    items = Item.query.filter_by(category_id=cat_id)\
+                      .order_by(Item.sort_order, Item.name).all()
+    return jsonify([{'id': i.id, 'name': i.name} for i in items])
+
+@app.route('/api/brands_by_item/<int:item_id>')
+@login_required
+def api_brands_by_item(item_id):
+    brands = Brand.query.filter_by(item_id=item_id)\
+                        .order_by(Brand.sort_order, Brand.name).all()
+    return jsonify([{'id': b.id, 'name': b.name} for b in brands])
+
+@app.route('/api/specs_by_brand/<int:brand_id>')
+@login_required
+def api_specs_by_brand(brand_id):
+    specs = Spec.query.filter_by(brand_id=brand_id)\
+                      .order_by(Spec.sort_order, Spec.name).all()
+    return jsonify([{'id': s.id, 'name': s.name, 'total_qty': s.total_qty} for s in specs])
+
+@app.route('/api/batches_by_spec/<int:spec_id>')
+@login_required
+def api_batches_by_spec(spec_id):
+    spec    = Spec.query.get_or_404(spec_id)
+    today   = now_tw().date()
+    batches = []
+    for b in spec.batches:
+        exp       = b.expiry_date.isoformat() if b.expiry_date else None
+        days_left = (b.expiry_date - today).days if b.expiry_date else None
+        batches.append({'id': b.id, 'qty': b.qty, 'expiry_date': exp,
+                        'days_left': days_left, 'note': b.note or ''})
+    return jsonify(batches)
+
+
+# ── Admin: Logs ───────────────────────────────────────────
 @app.route('/admin/logs')
 @login_required
 @editor_required
@@ -416,29 +549,22 @@ def admin_logs():
 @login_required
 @editor_required
 def sort_items():
-    data = request.get_json()
-    for entry in data:
+    for entry in request.get_json():
         item = Item.query.get(entry['id'])
-        if item:
-            item.sort_order = entry['order']
-    db.session.commit()
-    return jsonify({'ok': True})
-
+        if item: item.sort_order = entry['order']
+    db.session.commit(); return jsonify({'ok': True})
 
 @app.route('/admin/sort/categories', methods=['POST'])
 @login_required
 @editor_required
 def sort_categories():
-    data = request.get_json()
-    for entry in data:
+    for entry in request.get_json():
         cat = Category.query.get(entry['id'])
-        if cat:
-            cat.sort_order = entry['order']
-    db.session.commit()
-    return jsonify({'ok': True})
+        if cat: cat.sort_order = entry['order']
+    db.session.commit(); return jsonify({'ok': True})
 
 
-# ── Google Sheet sync ─────────────────────────────────────
+# ── Google Sheet ──────────────────────────────────────────
 @app.route('/admin/gsheet/sync', methods=['POST'])
 @login_required
 @admin_required
@@ -450,7 +576,6 @@ def gsheet_sync():
     except Exception as e:
         flash(f'同步失敗：{e}', 'danger')
     return redirect(url_for('admin_items'))
-
 
 @app.route('/admin/gsheet/import', methods=['POST'])
 @login_required
@@ -465,38 +590,29 @@ def gsheet_import():
     return redirect(url_for('admin_items'))
 
 
-# ── API: low-stock check ──────────────────────────────────
+# ── API: low-stock ────────────────────────────────────────
 @app.route('/api/low-stock')
 @login_required
 def api_low_stock():
     low = []
-    for spec in Spec.query.all():
-        if spec.qty <= spec.safe_qty:
-            low.append({
-                'item': spec.item.name,
-                'spec': spec.name,
-                'qty': spec.qty,
-                'safe': spec.safe_qty
-            })
+    for item in Item.query.all():
+        if item.status in ('low', 'out'):
+            low.append({'item': item.name, 'qty': item.total_qty, 'status': item.status})
     return jsonify(low)
 
 
 # ── Bootstrap ─────────────────────────────────────────────
 with app.app_context():
     db.create_all()
-    # Migration: add sort_order columns if not exist
+    # Migrations
     with db.engine.connect() as conn:
         from sqlalchemy import text
         for sql in [
             "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
-            "ALTER TABLE items ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
-            "ALTER TABLE specs ADD COLUMN IF NOT EXISTS expiry_date DATE",
+            "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
         ]:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-            except Exception:
-                conn.rollback()
+            try: conn.execute(text(sql)); conn.commit()
+            except Exception: conn.rollback()
     seed_data()
 
 if __name__ == '__main__':

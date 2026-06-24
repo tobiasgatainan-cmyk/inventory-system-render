@@ -351,7 +351,7 @@ def admin_add_item():
                     supplier=request.form['supplier'],
                     category_id=int(request.form['category_id']) if request.form['category_id'] else None)
         db.session.add(item); db.session.flush()
-        _save_brands(item.id, request.form)
+        _save_brands(item.id, request.form, is_edit=False)
         db.session.commit(); flash('品項新增成功', 'success')
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=None, cats=cats)
@@ -367,22 +367,58 @@ def admin_edit_item(iid):
         item.unit        = request.form['unit']
         item.supplier    = request.form['supplier']
         item.category_id = int(request.form['category_id']) if request.form['category_id'] else None
-        for brand in item.brands: db.session.delete(brand)
+
+        # 保留現有批次資料，先收集
+        existing_batches = {}
+        for brand in item.brands:
+            for spec in brand.specs:
+                existing_batches[spec.id] = list(spec.batches)
+
+        # 刪除舊品牌（cascade 會刪規格，但不刪批次因為先收集了）
+        # 先把批次從 spec 解綁，重新建立 spec 後再連回去
+        # 簡化做法：只刪品牌/規格結構，批次用 spec 名稱對應
+        old_spec_batches = {}
+        for brand in item.brands:
+            for spec in brand.specs:
+                key = (brand.name, spec.name)
+                old_spec_batches[key] = [b.id for b in spec.batches]
+                # 暫時解除關聯避免 cascade 刪除
+                for b in spec.batches:
+                    b.spec_id = None
+            db.session.flush()
+
+        for brand in item.brands:
+            db.session.delete(brand)
         db.session.flush()
-        _save_brands(item.id, request.form)
-        db.session.commit(); flash('更新成功', 'success')
+
+        _save_brands(item.id, request.form, is_edit=True)
+        db.session.flush()
+
+        # 重新把批次連結到對應的新規格
+        for brand in item.brands:
+            for spec in brand.specs:
+                key = (brand.name, spec.name)
+                if key in old_spec_batches:
+                    for batch_id in old_spec_batches[key]:
+                        b = Batch.query.get(batch_id)
+                        if b: b.spec_id = spec.id
+
+        # 清理沒有 spec_id 的孤立批次
+        Batch.query.filter_by(spec_id=None).delete()
+        db.session.commit()
+        flash('更新成功', 'success')
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=item, cats=cats)
 
-def _save_brands(item_id, form):
-    brand_names  = form.getlist('brand_name[]')
-    brand_safes  = form.getlist('brand_safe[]')
-    spec_names   = form.getlist('spec_name[]')
-    spec_qtys    = form.getlist('spec_qty[]')
-    spec_expiries= form.getlist('spec_expiry[]')
-    spec_costs   = form.getlist('spec_cost[]')
-    spec_notes   = form.getlist('spec_note[]')
-    brand_indices= form.getlist('spec_brand_index[]')  # which brand each spec belongs to
+def _save_brands(item_id, form, is_edit=False):
+    brand_names   = form.getlist('brand_name[]')
+    brand_safes   = form.getlist('brand_safe[]')
+    spec_names    = form.getlist('spec_name[]')
+    spec_qtys     = form.getlist('spec_qty[]')
+    spec_expiries = form.getlist('spec_expiry[]')
+    spec_costs    = form.getlist('spec_cost[]')
+    spec_notes    = form.getlist('spec_note[]')
+    brand_indices = form.getlist('spec_brand_index[]')
 
     brands_created = []
     for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
@@ -400,17 +436,24 @@ def _save_brands(item_id, form):
         if bidx >= len(brands_created): continue
         spec = Spec(brand_id=brands_created[bidx].id, name=sname.strip(), sort_order=si)
         db.session.add(spec); db.session.flush()
-        exp = None
-        if sexp.strip():
-            try: exp = date_type.fromisoformat(sexp.strip())
-            except ValueError: pass
-        cost = None
-        if scost.strip():
-            try: cost = float(scost.strip())
-            except ValueError: pass
-        batch = Batch(spec_id=spec.id, qty=int(sqty or 0),
-                      expiry_date=exp, cost_price=cost, note=snote.strip() or None)
-        db.session.add(batch)
+
+        # 編輯模式下，只建立 spec，不建立新 batch（庫存由入庫管理）
+        # 新增模式下，建立初始 batch
+        if not is_edit:
+            exp = None
+            if sexp.strip():
+                try: exp = date_type.fromisoformat(sexp.strip())
+                except ValueError: pass
+            cost = None
+            if scost.strip():
+                try: cost = float(scost.strip())
+                except ValueError: pass
+            qty = int(sqty or 0)
+            if qty > 0 or True:  # always create initial batch
+                batch = Batch(spec_id=spec.id, qty=qty,
+                              expiry_date=exp, cost_price=cost,
+                              note=snote.strip() or None)
+                db.session.add(batch)
 
 @app.route('/admin/items/<int:iid>/delete', methods=['POST'])
 @login_required

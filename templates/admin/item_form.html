@@ -2,9 +2,13 @@
 {% block title %}美善基金會庫存系統{% endblock %}
 {% block content %}
 <div class="container" style="max-width:700px">
-<h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">
+<h1 style="font-size:20px;color:#c0474d;margin-bottom:4px">
   📦 {{ '編輯品項' if item else '新增品項' }}
 </h1>
+<p style="font-size:12px;color:#a8958c;margin-bottom:20px">
+  {% if item %}編輯品項基本資料、品牌與規格名稱。庫存數量請透過左側「入庫」新增。{% else %}新增品項時可一併設定初始庫存。{% endif %}
+</p>
+
 <div class="card">
 <form method="POST" id="itemForm">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -41,7 +45,7 @@
     <div id="brands">
       {% if item and item.brands %}
         {% for brand in item.brands %}
-        <div class="brand-block" data-brand-index="{{ loop.index0 }}"
+        <div class="brand-block"
              style="border:1px solid #edddd0;border-radius:10px;padding:14px;margin-bottom:12px;background:#fffaf8">
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
             <div style="flex:1">
@@ -57,33 +61,50 @@
             <button type="button" onclick="removeBrand(this)"
               style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer;margin-top:16px">✕</button>
           </div>
-          <!-- Specs for this brand -->
           <div style="margin-left:8px">
-            <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:6px">規格</div>
+            <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:6px">
+              規格
+              {% if item %}<span style="font-weight:400;color:#aaa">（只編輯規格名稱，庫存由入庫管理）</span>{% endif %}
+            </div>
             <div class="spec-list">
               {% for spec in brand.specs %}
-              {% set batch = spec.batches[0] if spec.batches else none %}
-              <div class="spec-row" style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center">
+              <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
                 <input type="hidden" name="spec_brand_index[]" value="{{ loop.index0 }}">
-                <input type="text"   name="spec_name[]"   value="{{ spec.name }}"     placeholder="規格名稱" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="number" name="spec_qty[]"    value="{{ batch.qty if batch else 0 }}" placeholder="數量" min="0" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="number" name="spec_safe[]"   value="0" style="display:none">
-                <input type="date"   name="spec_expiry[]" value="{{ batch.expiry_date.strftime('%Y-%m-%d') if batch and batch.expiry_date else '' }}" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="number" name="spec_cost[]"   value="{{ batch.cost_price if batch and batch.cost_price else '' }}" placeholder="進價" step="0.01" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="text"   name="spec_note[]"   value="{{ batch.note if batch and batch.note else '' }}" placeholder="備註" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+                <input type="text" name="spec_name[]" value="{{ spec.name }}" placeholder="規格名稱"
+                       style="flex:2;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                {% if not item %}
+                <input type="number" name="spec_qty[]" placeholder="初始數量" min="0" value="0"
+                       style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                <input type="number" name="spec_safe[]" value="0" style="display:none">
+                <input type="date"   name="spec_expiry[]"
+                       style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                <input type="number" name="spec_cost[]" placeholder="進價" step="0.01"
+                       style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                <input type="text"   name="spec_note[]" placeholder="備註"
+                       style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                {% else %}
+                <input type="hidden" name="spec_qty[]"    value="0">
+                <input type="hidden" name="spec_safe[]"   value="0">
+                <input type="hidden" name="spec_expiry[]" value="">
+                <input type="hidden" name="spec_cost[]"   value="">
+                <input type="hidden" name="spec_note[]"   value="">
+                <span style="font-size:11px;color:#a8958c;white-space:nowrap">
+                  現有 {{ spec.total_qty }} {{ item.unit }} 
+                  （{{ spec.batches|length }} 批次）
+                </span>
+                {% endif %}
                 <button type="button" onclick="removeSpec(this)"
-                  style="padding:4px 8px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">✕</button>
+                  style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
               </div>
               {% endfor %}
             </div>
-            <button type="button" onclick="addSpec(this, {{ loop.index0 }})"
+            <button type="button" onclick="addSpec(this, {{ loop.index0 }}, {{ 'false' if item else 'true' }})"
               style="margin-top:4px;padding:4px 10px;background:#f7ecdf;color:#6b5a52;border:1px solid #edddd0;border-radius:6px;font-size:11px;cursor:pointer">＋ 新增規格</button>
           </div>
         </div>
         {% endfor %}
       {% else %}
-        <!-- default one brand block -->
-        <div class="brand-block" data-brand-index="0"
+        <div class="brand-block"
              style="border:1px solid #edddd0;border-radius:10px;padding:14px;margin-bottom:12px;background:#fffaf8">
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
             <div style="flex:1">
@@ -102,19 +123,24 @@
           <div style="margin-left:8px">
             <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:6px">規格</div>
             <div class="spec-list">
-              <div class="spec-row" style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center">
+              <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
                 <input type="hidden" name="spec_brand_index[]" value="0">
-                <input type="text"   name="spec_name[]"   placeholder="規格名稱" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="number" name="spec_qty[]"    placeholder="數量" min="0" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+                <input type="text"   name="spec_name[]"   placeholder="規格名稱"
+                       style="flex:2;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                <input type="number" name="spec_qty[]"    placeholder="初始數量" min="0" value="0"
+                       style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
                 <input type="number" name="spec_safe[]"   value="0" style="display:none">
-                <input type="date"   name="spec_expiry[]" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="number" name="spec_cost[]"   placeholder="進價" step="0.01" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-                <input type="text"   name="spec_note[]"   placeholder="備註" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+                <input type="date"   name="spec_expiry[]"
+                       style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                <input type="number" name="spec_cost[]"   placeholder="進價" step="0.01"
+                       style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+                <input type="text"   name="spec_note[]"   placeholder="備註"
+                       style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
                 <button type="button" onclick="removeSpec(this)"
-                  style="padding:4px 8px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">✕</button>
+                  style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
               </div>
             </div>
-            <button type="button" onclick="addSpec(this, 0)"
+            <button type="button" onclick="addSpec(this, 0, true)"
               style="margin-top:4px;padding:4px 10px;background:#f7ecdf;color:#6b5a52;border:1px solid #edddd0;border-radius:6px;font-size:11px;cursor:pointer">＋ 新增規格</button>
           </div>
         </div>
@@ -122,9 +148,11 @@
     </div>
   </div>
 
+  {% if not item %}
   <div style="font-size:11px;color:#aaa;margin-top:4px;margin-bottom:16px">
-    欄位順序：規格名稱 ／ 數量 ／ 到期日 ／ 進價 ／ 備註
+    新增時欄位順序：規格名稱 ／ 初始數量 ／ 到期日 ／ 進價 ／ 備註
   </div>
+  {% endif %}
 
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
     <a href="{{ url_for('admin_items') }}" class="btn btn-secondary">取消</a>
@@ -135,14 +163,30 @@
 </div>
 
 <script>
+const isEdit = {{ 'true' if item else 'false' }};
 let brandCount = {{ item.brands|length if item and item.brands else 1 }};
 
 function addBrand() {
-  const idx = brandCount;
-  brandCount++;
+  const idx = brandCount++;
+  const specFields = isEdit ? `
+    <input type="hidden" name="spec_qty[]"    value="0">
+    <input type="hidden" name="spec_safe[]"   value="0">
+    <input type="hidden" name="spec_expiry[]" value="">
+    <input type="hidden" name="spec_cost[]"   value="">
+    <input type="hidden" name="spec_note[]"   value="">
+  ` : `
+    <input type="number" name="spec_qty[]"    placeholder="初始數量" min="0" value="0"
+           style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+    <input type="number" name="spec_safe[]"   value="0" style="display:none">
+    <input type="date"   name="spec_expiry[]"
+           style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+    <input type="number" name="spec_cost[]"   placeholder="進價" step="0.01"
+           style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+    <input type="text"   name="spec_note[]"   placeholder="備註"
+           style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+  `;
   const html = `
-  <div class="brand-block" data-brand-index="${idx}"
-       style="border:1px solid #edddd0;border-radius:10px;padding:14px;margin-bottom:12px;background:#fffaf8">
+  <div class="brand-block" style="border:1px solid #edddd0;border-radius:10px;padding:14px;margin-bottom:12px;background:#fffaf8">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
       <div style="flex:1">
         <label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:4px">品牌名稱</label>
@@ -160,19 +204,16 @@ function addBrand() {
     <div style="margin-left:8px">
       <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:6px">規格</div>
       <div class="spec-list">
-        <div class="spec-row" style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center">
+        <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
           <input type="hidden" name="spec_brand_index[]" value="${idx}">
-          <input type="text"   name="spec_name[]"   placeholder="規格名稱" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-          <input type="number" name="spec_qty[]"    placeholder="數量" min="0" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-          <input type="number" name="spec_safe[]"   value="0" style="display:none">
-          <input type="date"   name="spec_expiry[]" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-          <input type="number" name="spec_cost[]"   placeholder="進價" step="0.01" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-          <input type="text"   name="spec_note[]"   placeholder="備註" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+          <input type="text" name="spec_name[]" placeholder="規格名稱"
+                 style="flex:2;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+          ${specFields}
           <button type="button" onclick="removeSpec(this)"
-            style="padding:4px 8px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">✕</button>
+            style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
         </div>
       </div>
-      <button type="button" onclick="addSpec(this, ${idx})"
+      <button type="button" onclick="addSpec(this, ${idx}, ${!isEdit})"
         style="margin-top:4px;padding:4px 10px;background:#f7ecdf;color:#6b5a52;border:1px solid #edddd0;border-radius:6px;font-size:11px;cursor:pointer">＋ 新增規格</button>
     </div>
   </div>`;
@@ -180,23 +221,36 @@ function addBrand() {
 }
 
 function removeBrand(btn) {
-  const blocks = document.querySelectorAll('.brand-block');
-  if (blocks.length <= 1) { alert('至少需要一個品牌'); return; }
+  if (document.querySelectorAll('.brand-block').length <= 1) { alert('至少需要一個品牌'); return; }
   btn.closest('.brand-block').remove();
 }
 
-function addSpec(btn, brandIdx) {
-  const row = `
-  <div class="spec-row" style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center">
-    <input type="hidden" name="spec_brand_index[]" value="${brandIdx}">
-    <input type="text"   name="spec_name[]"   placeholder="規格名稱" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-    <input type="number" name="spec_qty[]"    placeholder="數量" min="0" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+function addSpec(btn, brandIdx, showFields) {
+  const specFields = showFields ? `
+    <input type="number" name="spec_qty[]"    placeholder="初始數量" min="0" value="0"
+           style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
     <input type="number" name="spec_safe[]"   value="0" style="display:none">
-    <input type="date"   name="spec_expiry[]" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-    <input type="number" name="spec_cost[]"   placeholder="進價" step="0.01" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
-    <input type="text"   name="spec_note[]"   placeholder="備註" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px">
+    <input type="date"   name="spec_expiry[]"
+           style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+    <input type="number" name="spec_cost[]"   placeholder="進價" step="0.01"
+           style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+    <input type="text"   name="spec_note[]"   placeholder="備註"
+           style="flex:1.5;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+  ` : `
+    <input type="hidden" name="spec_qty[]"    value="0">
+    <input type="hidden" name="spec_safe[]"   value="0">
+    <input type="hidden" name="spec_expiry[]" value="">
+    <input type="hidden" name="spec_cost[]"   value="">
+    <input type="hidden" name="spec_note[]"   value="">
+  `;
+  const row = `
+  <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+    <input type="hidden" name="spec_brand_index[]" value="${brandIdx}">
+    <input type="text" name="spec_name[]" placeholder="規格名稱"
+           style="flex:2;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+    ${specFields}
     <button type="button" onclick="removeSpec(this)"
-      style="padding:4px 8px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">✕</button>
+      style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
   </div>`;
   btn.previousElementSibling.insertAdjacentHTML('beforeend', row);
 }

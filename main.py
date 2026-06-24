@@ -368,43 +368,57 @@ def admin_edit_item(iid):
         item.supplier    = request.form['supplier']
         item.category_id = int(request.form['category_id']) if request.form['category_id'] else None
 
-        # 保留現有批次資料，先收集
-        existing_batches = {}
+        # 收集現有批次，以 (品牌名, 規格名) 為 key
+        old_batches = {}
         for brand in item.brands:
             for spec in brand.specs:
-                existing_batches[spec.id] = list(spec.batches)
+                key = (brand.name.strip(), spec.name.strip())
+                old_batches[key] = list(spec.batches)
 
-        # 刪除舊品牌（cascade 會刪規格，但不刪批次因為先收集了）
-        # 先把批次從 spec 解綁，重新建立 spec 後再連回去
-        # 簡化做法：只刪品牌/規格結構，批次用 spec 名稱對應
-        old_spec_batches = {}
-        for brand in item.brands:
-            for spec in brand.specs:
-                key = (brand.name, spec.name)
-                old_spec_batches[key] = [b.id for b in spec.batches]
-                # 暫時解除關聯避免 cascade 刪除
-                for b in spec.batches:
-                    b.spec_id = None
-            db.session.flush()
-
+        # 刪除舊品牌/規格（批次會被 cascade 刪除）
         for brand in item.brands:
             db.session.delete(brand)
         db.session.flush()
 
-        _save_brands(item.id, request.form, is_edit=True)
-        db.session.flush()
+        # 建立新品牌/規格
+        brand_names   = request.form.getlist('brand_name[]')
+        brand_safes   = request.form.getlist('brand_safe[]')
+        spec_names    = request.form.getlist('spec_name[]')
+        brand_indices = request.form.getlist('spec_brand_index[]')
 
-        # 重新把批次連結到對應的新規格
-        for brand in item.brands:
-            for spec in brand.specs:
-                key = (brand.name, spec.name)
-                if key in old_spec_batches:
-                    for batch_id in old_spec_batches[key]:
-                        b = Batch.query.get(batch_id)
-                        if b: b.spec_id = spec.id
+        brands_created = []
+        for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
+            if not bname.strip(): continue
+            brand = Brand(item_id=item.id, name=bname.strip(),
+                          safe_qty=int(bsafe or 0), sort_order=bi)
+            db.session.add(brand); db.session.flush()
+            brands_created.append(brand)
 
-        # 清理沒有 spec_id 的孤立批次
-        Batch.query.filter_by(spec_id=None).delete()
+        for si, (sname, bidx) in enumerate(zip(spec_names, brand_indices)):
+            if not sname.strip(): continue
+            try: bidx = int(bidx)
+            except (ValueError, TypeError): bidx = 0
+            if bidx >= len(brands_created): continue
+            spec = Spec(brand_id=brands_created[bidx].id, name=sname.strip(), sort_order=si)
+            db.session.add(spec); db.session.flush()
+
+            # 把對應的舊批次重新指向新 spec
+            key = (brands_created[bidx].name.strip(), sname.strip())
+            if key in old_batches:
+                for batch in old_batches[key]:
+                    new_batch = Batch(
+                        spec_id     = spec.id,
+                        qty         = batch.qty,
+                        expiry_date = batch.expiry_date,
+                        cost_price  = batch.cost_price,
+                        note        = batch.note,
+                        created_at  = batch.created_at,
+                    )
+                    db.session.add(new_batch)
+            else:
+                # 新規格，建立空批次
+                db.session.add(Batch(spec_id=spec.id, qty=0))
+
         db.session.commit()
         flash('更新成功', 'success')
         return redirect(url_for('admin_items'))

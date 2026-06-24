@@ -603,16 +603,27 @@ def api_low_stock():
 
 # ── Bootstrap ─────────────────────────────────────────────
 with app.app_context():
-    db.create_all()
-    # Migrations
+    # 檢查是否需要重建（偵測新架構的 batches 表是否存在）
     with db.engine.connect() as conn:
-        from sqlalchemy import text
-        for sql in [
-            "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
-            "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
-        ]:
-            try: conn.execute(text(sql)); conn.commit()
-            except Exception: conn.rollback()
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+        existing_tables = inspector.get_table_names()
+        needs_rebuild = 'batches' not in existing_tables
+
+    if needs_rebuild:
+        db.drop_all()
+        db.create_all()
+    else:
+        db.create_all()
+        # 舊有遷移
+        with db.engine.connect() as conn:
+            for sql in [
+                "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+                "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+            ]:
+                try: conn.execute(text(sql)); conn.commit()
+                except Exception: conn.rollback()
+
     seed_data()
 
 if __name__ == '__main__':

@@ -1,35 +1,27 @@
 {% extends 'base.html' %}
 {% block title %}美善基金會庫存系統{% endblock %}
 {% block content %}
-
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
 #main-container{max-width:100%;padding:0;margin:0}
 :root{--bg:#fdf6f0;--surface:#fff;--surface2:#f7ecdf;--border:#edddd0;--border2:#e0c8b8;--text:#2a1f1a;--text2:#6b5a52;--text3:#a8958c;--accent:#fe7b81;--accent-light:#fff0f1;--accent-dark:#e55e65;--ok:#4a9e6b;--ok-light:#edf7f1;--out:#d94f55;--out-light:#fdf0f0;--low:#d97b2a;--low-light:#fef3e8;--radius:8px;--radius-lg:14px;--mono:'JetBrains Mono',monospace}
-
-.admin-layout{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 80px)}
-
-/* ── sidebar ── */
+.admin-layout{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 54px)}
 .adm-sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 20px 20px 24px;overflow-y:auto}
 .sb-section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);margin-bottom:10px;margin-top:20px}
 .sb-section:first-child{margin-top:0}
-
 .type-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
 .type-btn{padding:9px;border:1px solid var(--border);border-radius:var(--radius);background:white;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:5px}
 .type-btn.in-btn.active{background:var(--ok-light);border-color:var(--ok);color:var(--ok)}
 .type-btn.out-btn.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
 .type-btn:not(.active):hover{background:var(--bg)}
-
 .fc{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
 .fl{font-size:12px;font-weight:500;color:var(--text2)}
 .fi{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:white;color:var(--text);outline:none;width:100%;transition:.15s}
 .fi:focus{border-color:var(--accent)}
 .form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-
 .submit-btn{width:100%;padding:10px;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
 .in-submit{background:var(--ok);color:white}.in-submit:hover{background:#3d8a5c}
 .out-submit{background:var(--accent);color:white}.out-submit:hover{background:var(--accent-dark)}
-
 .recent-list{margin-top:4px}
 .recent-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
 .recent-item:last-child{border-bottom:none}
@@ -41,112 +33,143 @@
 .rqty{font-family:var(--mono);font-weight:700}
 .rqty.in{color:var(--ok)}.rqty.out{color:var(--accent)}
 
-/* ── main ── */
+/* out modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:white;border-radius:var(--radius-lg);padding:24px;width:420px;max-width:95vw}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--text)}
+.batch-select-row{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:.15s}
+.batch-select-row:hover,.batch-select-row.selected{border-color:var(--accent);background:var(--accent-light)}
+.batch-select-row input[type=radio]{accent-color:var(--accent)}
+
 .adm-main{padding:20px;overflow-x:auto}
 .adm-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px}
 .atab{padding:8px 14px;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;display:flex;align-items:center;gap:6px}
 .atab:hover{color:var(--text)}.atab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .tab-panel{display:none}.tab-panel.active{display:block}
-
 .action-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .action-bar input,.action-bar select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:white;color:var(--text);outline:none}
 .action-bar input:focus,.action-bar select:focus{border-color:var(--accent)}
 .add-btn{margin-left:auto;padding:8px 14px;border:none;background:var(--accent);color:white;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s;text-decoration:none}
 .add-btn:hover{background:var(--accent-dark)}
-
 .data-table{width:100%;min-width:700px;border-collapse:collapse;background:var(--surface);border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);font-size:13px}
 .data-table th{background:var(--bg);padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap}
-.data-table td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+.data-table td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 .data-table tr:last-child td{border-bottom:none}
 .data-table tr:hover td{background:var(--bg)}
 .cat-pill{padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
-.qty-num{font-family:var(--mono);font-weight:700;font-size:14px}
-.status-pill{padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
-.status-pill.ok{background:var(--ok-light);color:var(--ok)}
-.status-pill.low{background:var(--low-light);color:var(--low)}
-.status-pill.out{background:var(--out-light);color:var(--out)}
+.qty-num{font-weight:700;font-size:14px}
 .td-actions{display:flex;gap:4px;justify-content:flex-end}
 .icon-btn{padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:white;cursor:pointer;font-size:12px;color:var(--text2);transition:.15s;text-decoration:none;display:inline-flex;align-items:center}
 .icon-btn:hover{background:var(--bg);border-color:var(--border2)}
 .icon-btn.danger:hover{background:var(--out-light);border-color:#e89499;color:var(--out)}
-
 .log-table{width:100%;border-collapse:collapse;font-size:13px}
 .log-table th{background:var(--bg);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);border-bottom:1px solid var(--border)}
 .log-table td{padding:9px 12px;border-bottom:1px solid var(--border)}
 .log-table tr:last-child td{border-bottom:none}
 .log-table tr:hover td{background:var(--bg)}
-.chg-pos{color:var(--ok);font-weight:700;font-family:var(--mono)}
-.chg-neg{color:var(--out);font-weight:700;font-family:var(--mono)}
-
-@media(max-width:768px){.admin-layout{grid-template-columns:1fr}.adm-sidebar{border-right:none;border-bottom:1px solid var(--border)}}
+.sort-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none}
 </style>
 
-<div class="admin-layout">
+<!-- Out modal -->
+<div class="modal-bg" id="outModal">
+  <div class="modal">
+    <h3>⬆️ 出庫選擇批次</h3>
+    <div id="batchList"></div>
+    <div class="form-row-2" style="margin-top:12px">
+      <div class="fc">
+        <label class="fl">出庫數量</label>
+        <input type="number" class="fi" id="outQty" min="1" value="1">
+      </div>
+      <div class="fc">
+        <label class="fl">記錄人／原因</label>
+        <input type="text" class="fi" id="outReason" placeholder="姓名／原因">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+      <button onclick="closeOutModal()" style="padding:8px 16px;border:1px solid var(--border);background:white;border-radius:var(--radius);cursor:pointer;font-size:13px">取消</button>
+      <button onclick="submitOut()" style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">確認出庫</button>
+    </div>
+  </div>
+</div>
+<form method="POST" action="{{ url_for('stock_out') }}" id="outForm" style="display:none">
+  <input type="hidden" name="batch_id" id="outBatchId">
+  <input type="hidden" name="qty"      id="outQtyHidden">
+  <input type="hidden" name="reason"   id="outReasonHidden">
+</form>
 
-<!-- ── Left sidebar: quick in/out ── -->
+<div class="admin-layout">
+<!-- sidebar -->
 <div class="adm-sidebar">
   <div class="sb-section">快速紀錄</div>
   <div class="type-btns">
     <button class="type-btn in-btn active" id="btn-in"  onclick="setTxnType('in')">⬇️ 入庫</button>
     <button class="type-btn out-btn"       id="btn-out" onclick="setTxnType('out')">⬆️ 出庫</button>
   </div>
-  <form method="POST" action="{{ url_for('stock_adjust') }}" id="txnForm">
-    <input type="hidden" name="spec_id" id="txnSpecId">
-    <div class="fc">
-      <label class="fl">類別</label>
-      <select class="fi" id="txnCat" onchange="onCatChange()">
+
+  <!-- IN form -->
+  <form method="POST" action="{{ url_for('stock_in') }}" id="inForm">
+    <input type="hidden" name="spec_id" id="inSpecId">
+    <div class="fc"><label class="fl">類別</label>
+      <select class="fi" id="inCat" onchange="onCatChange('in')">
         <option value="">— 選擇類別 —</option>
-        {% for c in cats %}
-        <option value="{{ c.id }}">{{ c.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="fc">
-      <label class="fl">品項</label>
-      <select class="fi" id="txnItem" onchange="onItemChange()">
-        <option value="">— 先選類別 —</option>
-      </select>
-    </div>
-    <div class="fc">
-      <label class="fl">規格</label>
-      <select class="fi" id="txnSpec" onchange="onSpecChange()">
-        <option value="">— 先選品項 —</option>
-      </select>
-    </div>
+        {% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select></div>
+    <div class="fc"><label class="fl">品項</label>
+      <select class="fi" id="inItem" onchange="onItemChange('in')"><option value="">— 先選類別 —</option></select></div>
+    <div class="fc"><label class="fl">品牌</label>
+      <select class="fi" id="inBrand" onchange="onBrandChange('in')"><option value="">— 先選品項 —</option></select></div>
+    <div class="fc"><label class="fl">規格</label>
+      <select class="fi" id="inSpec" onchange="document.getElementById('inSpecId').value=this.value"><option value="">— 先選品牌 —</option></select></div>
     <div class="form-row-2">
-      <div class="fc">
-        <label class="fl">數量</label>
-        <input type="number" class="fi" name="change" id="txnQty" value="1" min="1" required>
-      </div>
-      <div class="fc">
-        <label class="fl">記錄人</label>
-        <input type="text" class="fi" name="reason" id="txnPerson" placeholder="姓名／原因">
-      </div>
+      <div class="fc"><label class="fl">數量</label>
+        <input type="number" class="fi" name="qty" value="1" min="1" required></div>
+      <div class="fc"><label class="fl">記錄人</label>
+        <input type="text" class="fi" name="reason" placeholder="姓名／原因"></div>
     </div>
-    <div class="fc">
-      <label class="fl">到期日 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
-      <input type="date" class="fi" name="expiry_date" id="txnExpiry">
+    <div class="fc"><label class="fl">到期日 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
+      <input type="date" class="fi" name="expiry_date"></div>
+    <div class="form-row-2">
+      <div class="fc"><label class="fl">進價 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
+        <input type="number" class="fi" name="cost_price" step="0.01" placeholder="0.00"></div>
+      <div class="fc"><label class="fl">備註 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
+        <input type="text" class="fi" name="note" placeholder="備註"></div>
     </div>
     <button type="submit" class="submit-btn in-submit" id="submitBtn">⬇️ 確認入庫</button>
   </form>
 
+  <!-- OUT trigger (not a form, triggers modal) -->
+  <div id="outPanel" style="display:none">
+    <div class="fc"><label class="fl">類別</label>
+      <select class="fi" id="outCat" onchange="onCatChange('out')">
+        <option value="">— 選擇類別 —</option>
+        {% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select></div>
+    <div class="fc"><label class="fl">品項</label>
+      <select class="fi" id="outItem" onchange="onItemChange('out')"><option value="">— 先選類別 —</option></select></div>
+    <div class="fc"><label class="fl">品牌</label>
+      <select class="fi" id="outBrand" onchange="onBrandChange('out')"><option value="">— 先選品項 —</option></select></div>
+    <div class="fc"><label class="fl">規格</label>
+      <select class="fi" id="outSpec"><option value="">— 先選品牌 —</option></select></div>
+    <button type="button" class="submit-btn out-submit" onclick="openOutModal()">⬆️ 選擇批次出庫</button>
+  </div>
+
   <div class="sb-section" style="margin-top:24px">最近異動</div>
   <div class="recent-list">
-    {% set logs = [] %}
     {% for log in recent_logs %}
     <div class="recent-item">
       <div class="rbadge {% if log.change > 0 %}in{% else %}out{% endif %}">
-        {{ '⬇️' if log.change > 0 else '⬆️' }}
-      </div>
+        {{ '⬇️' if log.change > 0 else '⬆️' }}</div>
       <div class="rinfo">
-        <div class="rname">{{ log.spec.item.name if log.spec else '—' }}
-          {% if log.spec %}<span style="font-size:10px;color:var(--text3)"> · {{ log.spec.name }}</span>{% endif %}
+        <div class="rname">
+          {% if log.batch %}{{ log.batch.spec.brand.item.name }}
+            <span style="font-size:10px;color:var(--text3)"> · {{ log.batch.spec.brand.name }} {{ log.batch.spec.name }}</span>
+          {% else %}—{% endif %}
         </div>
         <div class="rtime">{{ log.created_at.strftime('%H:%M') }}{% if log.reason %} · {{ log.reason }}{% endif %}</div>
       </div>
       <div class="rqty {% if log.change > 0 %}in{% else %}out{% endif %}">
-        {{ '+' if log.change > 0 else '' }}{{ log.change }}
-      </div>
+        {{ '+' if log.change > 0 else '' }}{{ log.change }}</div>
     </div>
     {% else %}
     <div style="color:var(--text3);font-size:13px;padding:8px 0">尚無異動紀錄</div>
@@ -154,7 +177,7 @@
   </div>
 </div>
 
-<!-- ── Main area ── -->
+<!-- main -->
 <div class="adm-main">
   <div class="adm-tabs">
     <button class="atab active" onclick="switchTab('items',this)">📦 品項管理</button>
@@ -162,7 +185,7 @@
     <button class="atab"        onclick="switchTab('sort',this)">↕️ 排序管理</button>
   </div>
 
-  <!-- 品項管理 tab -->
+  <!-- 品項管理 -->
   <div class="tab-panel active" id="panel-items">
     <div class="action-bar">
       <input type="text" id="itemSearch" placeholder="🔍 搜尋品項…" oninput="filterTable()">
@@ -175,7 +198,7 @@
         <button type="submit" style="padding:7px 12px;background:var(--ok-light);color:var(--ok);border:1px solid #8ecaaa;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">📊 同步至 Sheet</button>
       </form>
       <form method="POST" action="{{ url_for('gsheet_import') }}" style="margin:0"
-            onsubmit="return confirm('確定從 Google Sheet 匯入數量？這會覆蓋資料庫中的庫存數量。')">
+            onsubmit="return confirm('確定從 Google Sheet 匯入？這會覆蓋資料庫數量。')">
         <button type="submit" style="padding:7px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #a8c7fa;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">📥 從 Sheet 匯入</button>
       </form>
       {% endif %}
@@ -184,26 +207,38 @@
     <div style="overflow-x:auto">
     <table class="data-table" id="itemTable">
       <thead>
-        <tr><th>類別</th><th>品項名稱</th><th>規格</th><th>現有庫存</th><th>到期日</th><th>單位</th><th>供應商</th><th style="text-align:right">操作</th></tr>
+        <tr><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>數量</th><th>到期日</th><th>進價</th><th>備註</th><th style="text-align:right">操作</th></tr>
       </thead>
       <tbody>
       {% for item in items %}
-        {% for spec in item.specs %}
-        {% set ss = 'out' if spec.qty==0 else ('low' if spec.qty<=spec.safe_qty else 'ok') %}
+        {% set item_rows = [] %}
+        {% for brand in item.brands %}
+          {% for spec in brand.specs %}
+            {% for batch in spec.batches %}
+              {% set _ = item_rows.append({'brand':brand,'spec':spec,'batch':batch}) %}
+            {% endfor %}
+          {% endfor %}
+        {% endfor %}
+        {% if item_rows %}
+        {% for row in item_rows %}
+        {% set batch = row.batch %}
+        {% set exp_status = 'out' if (batch.expiry_date and batch.expiry_date <= today) else ('low' if (batch.expiry_date and batch.expiry_date <= today_30) else 'ok') %}
+        {% set qs = 'out' if batch.qty==0 else ('low' if batch.qty <= row.brand.safe_qty else 'ok') %}
         <tr data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}">
           {% if loop.first %}
-          <td rowspan="{{ item.specs|length }}"><span class="cat-pill">{{ item.category.name if item.category else '—' }}</span></td>
-          <td rowspan="{{ item.specs|length }}" style="font-weight:600">{{ item.name }}</td>
+          <td rowspan="{{ item_rows|length }}"><span class="cat-pill">{{ item.category.name if item.category else '—' }}</span></td>
+          <td rowspan="{{ item_rows|length }}" style="font-weight:600">{{ item.name }}</td>
           {% endif %}
-          <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ spec.name }}</span></td>
-          <td><span class="qty-num" style="color:{% if ss=='out' %}var(--out){% elif ss=='low' %}var(--low){% else %}var(--ok){% endif %};font-weight:700;font-size:14px">{{ spec.qty }}</span></td>
-          <td style="font-size:12px;color:{% if spec.expiry_date and spec.expiry_date <= today %}var(--out){% elif spec.expiry_date and spec.expiry_date <= today_30 %}var(--low){% else %}var(--text3){% endif %}">
-            {{ spec.expiry_date.strftime('%Y-%m-%d') if spec.expiry_date else '—' }}
+          <td style="font-size:12px;font-weight:600;color:var(--text2)">{{ row.brand.name }}</td>
+          <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ row.spec.name }}</span></td>
+          <td><span class="qty-num" style="color:{% if qs=='out' %}var(--out){% elif qs=='low' %}var(--low){% else %}var(--ok){% endif %}">{{ batch.qty }}</span></td>
+          <td style="font-size:12px;color:{% if exp_status=='out' %}var(--out){% elif exp_status=='low' %}var(--low){% else %}var(--text3){% endif %}">
+            {{ batch.expiry_date.strftime('%Y-%m-%d') if batch.expiry_date else '—' }}
           </td>
-          <td style="color:var(--text3)">{{ item.unit }}</td>
+          <td style="font-size:12px;color:var(--text3)">{{ batch.cost_price if batch.cost_price else '—' }}</td>
+          <td style="font-size:12px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ batch.note or '—' }}</td>
           {% if loop.first %}
-          <td rowspan="{{ item.specs|length }}" style="font-size:12px;color:var(--text3)">{{ item.supplier or '—' }}</td>
-          <td rowspan="{{ item.specs|length }}">
+          <td rowspan="{{ item_rows|length }}">
             <div class="td-actions">
               <a href="{{ url_for('admin_edit_item', iid=item.id) }}" class="icon-btn">✏️ 編輯</a>
               <form method="POST" action="{{ url_for('admin_delete_item', iid=item.id) }}" style="display:inline"
@@ -215,248 +250,211 @@
           {% endif %}
         </tr>
         {% endfor %}
+        {% else %}
+        <tr data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}">
+          <td><span class="cat-pill">{{ item.category.name if item.category else '—' }}</span></td>
+          <td style="font-weight:600">{{ item.name }}</td>
+          <td colspan="6" style="color:var(--text3);font-size:12px">尚無品牌／規格資料</td>
+          <td>
+            <div class="td-actions">
+              <a href="{{ url_for('admin_edit_item', iid=item.id) }}" class="icon-btn">✏️ 編輯</a>
+              <form method="POST" action="{{ url_for('admin_delete_item', iid=item.id) }}" style="display:inline"
+                    onsubmit="return confirm('確定刪除 {{ item.name }}？')">
+                <button type="submit" class="icon-btn danger">🗑️</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
       {% endfor %}
       </tbody>
     </table>
     </div>
   </div>
 
-  <!-- 異動紀錄 tab -->
+  <!-- 異動紀錄 -->
   <div class="tab-panel" id="panel-logs">
     <table class="log-table">
-      <thead>
-        <tr><th>時間</th><th>品項</th><th>規格</th><th>異動</th><th>原因／記錄人</th></tr>
-      </thead>
+      <thead><tr><th>時間</th><th>品項</th><th>品牌</th><th>規格</th><th>異動</th><th>原因／記錄人</th></tr></thead>
       <tbody>
       {% for log in all_logs %}
-      <tr style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(217,79,85,.06){% endif %}">
+      <tr style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(254,123,129,.06){% endif %}">
         <td style="color:var(--text3);white-space:nowrap;font-size:12px">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
-        <td style="font-weight:600">{{ log.spec.item.name if log.spec else '—' }}</td>
-        <td style="font-size:12px;color:var(--text2)">{{ log.spec.name if log.spec else '—' }}</td>
-        <td>
-          <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;
-            background:{% if log.change > 0 %}var(--ok-light){% else %}var(--out-light){% endif %};
-            color:{% if log.change > 0 %}var(--ok){% else %}var(--out){% endif %}">
-            {{ '+' if log.change > 0 else '' }}{{ log.change }}
-          </span>
-        </td>
+        <td style="font-weight:600">{{ log.batch.spec.brand.item.name if log.batch else '—' }}</td>
+        <td style="font-size:12px;color:var(--text2)">{{ log.batch.spec.brand.name if log.batch else '—' }}</td>
+        <td style="font-size:12px;color:var(--text3)">{{ log.batch.spec.name if log.batch else '—' }}</td>
+        <td><span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;
+          background:{% if log.change > 0 %}var(--ok-light){% else %}var(--accent-light){% endif %};
+          color:{% if log.change > 0 %}var(--ok){% else %}var(--accent){% endif %}">
+          {{ '+' if log.change > 0 else '' }}{{ log.change }}</span></td>
         <td style="font-size:12px;color:var(--text3)">{{ log.reason or '—' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">尚無紀錄</td></tr>
+      <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">尚無紀錄</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <!-- 排序管理 tab -->
+  <!-- 排序管理 -->
   <div class="tab-panel" id="panel-sort">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:4px">
-
-      <!-- 類別排序（左） -->
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px">類別順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（拖曳調整）</span></div>
         <div id="sortCats" style="display:flex;flex-direction:column;gap:4px">
           {% for c in cats %}
-          <div class="sort-row" data-id="{{ c.id }}" data-type="cat"
-               style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
+          <div class="sort-row" data-id="{{ c.id }}" draggable="true">
             <span style="color:var(--text3);font-size:16px">⠿</span>
             <span style="font-weight:600;font-size:13px">{{ c.name }}</span>
             <span style="font-size:11px;color:var(--text3);margin-left:auto">{{ items|selectattr('category_id','eq',c.id)|list|length }} 項</span>
-          </div>
-          {% endfor %}
+          </div>{% endfor %}
         </div>
         <button onclick="saveSort('cat')" style="margin-top:12px;padding:9px 18px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存類別順序</button>
       </div>
-
-      <!-- 品項排序（右，按類別分組） -->
       <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px">品項順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（同類別內拖曳調整）</span></div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px">品項順序 <span style="font-weight:400;color:var(--text3);font-size:11px">（同類別內拖曳）</span></div>
         <div style="display:flex;flex-direction:column;gap:12px;max-height:520px;overflow-y:auto" id="sortItemsWrap">
-          {% for c in cats %}
-          {% set cat_items = items|selectattr('category_id','eq',c.id)|list %}
-          {% if cat_items %}
+          {% for c in cats %}{% set cat_items = items|selectattr('category_id','eq',c.id)|list %}{% if cat_items %}
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--accent);padding:4px 8px;background:var(--accent-light);border-radius:6px;margin-bottom:4px;letter-spacing:.5px">
-              {{ c.name }}
-            </div>
+            <div style="font-size:11px;font-weight:700;color:var(--accent);padding:4px 8px;background:var(--accent-light);border-radius:6px;margin-bottom:4px">{{ c.name }}</div>
             <div class="sort-item-group" data-cat-id="{{ c.id }}" style="display:flex;flex-direction:column;gap:3px">
               {% for item in cat_items %}
-              <div class="sort-row sort-item-row" data-id="{{ item.id }}" data-cat="{{ c.id }}"
-                   style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none">
+              <div class="sort-row sort-item-row" data-id="{{ item.id }}" data-cat="{{ c.id }}" draggable="true">
                 <span style="color:var(--text3);font-size:14px">⠿</span>
                 <span style="font-size:13px;font-weight:500">{{ item.name }}</span>
-              </div>
-              {% endfor %}
+              </div>{% endfor %}
             </div>
-          </div>
-          {% endif %}
-          {% endfor %}
+          </div>{% endif %}{% endfor %}
         </div>
         <button onclick="saveSortItems()" style="margin-top:12px;padding:9px 18px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">💾 儲存品項順序</button>
       </div>
-
     </div>
     <div id="sortMsg" style="margin-top:12px;font-size:13px;color:var(--ok);display:none">✅ 儲存成功！重新整理後生效。</div>
   </div>
 </div>
 </div>
 
-{# Item data for JS dropdown #}
 <script>
-const itemData = [
-  {% for item in items %}
-  { id: {{ item.id }}, name: {{ item.name|tojson }}, catId: {{ item.category_id or 'null' }},
-    specs: [{% for s in item.specs %}{ id: {{ s.id }}, name: {{ s.name|tojson }}, qty: {{ s.qty }}, unit: {{ item.unit|tojson }} }{% if not loop.last %},{% endif %}{% endfor %}] }{% if not loop.last %},{% endif %}
-  {% endfor %}
-];
-
-let txnType = 'in';
-
-function setTxnType(t) {
-  txnType = t;
-  document.getElementById('btn-in').classList.toggle('active', t==='in');
-  document.getElementById('btn-out').classList.toggle('active', t==='out');
-  const btn = document.getElementById('submitBtn');
-  const expiryRow = document.getElementById('txnExpiry').closest('.fc');
-  if (t === 'in') {
-    btn.className='submit-btn in-submit';
-    btn.innerHTML='⬇️ 確認入庫';
-  } else {
-    btn.className='submit-btn out-submit';
-    btn.innerHTML='⬆️ 確認出庫';
-  }
-  const qtyInput = document.getElementById('txnQty');
-  qtyInput.name = t === 'in' ? 'change' : '_change_neg';
+// ── txn type ──
+let txnType='in';
+function setTxnType(t){
+  txnType=t;
+  document.getElementById('btn-in').classList.toggle('active',t==='in');
+  document.getElementById('btn-out').classList.toggle('active',t==='out');
+  document.getElementById('inForm').style.display=t==='in'?'':'none';
+  document.getElementById('outPanel').style.display=t==='out'?'':'none';
+  document.getElementById('submitBtn').className='submit-btn '+(t==='in'?'in-submit':'out-submit');
+  document.getElementById('submitBtn').innerHTML=t==='in'?'⬇️ 確認入庫':'⬆️ 選擇批次出庫';
 }
 
-document.getElementById('txnForm').addEventListener('submit', function(e) {
-  if (txnType === 'out') {
-    const val = parseInt(document.getElementById('txnQty').value) || 0;
-    document.getElementById('txnQty').name = 'change';
-    document.getElementById('txnQty').value = -val;
-  }
+// ── dropdowns ──
+async function onCatChange(type){
+  const catId=document.getElementById(type+'Cat').value;
+  const itemSel=document.getElementById(type+'Item');
+  itemSel.innerHTML='<option value="">載入中…</option>';
+  document.getElementById(type+'Brand').innerHTML='<option value="">— 先選品項 —</option>';
+  document.getElementById(type+'Spec').innerHTML='<option value="">— 先選品牌 —</option>';
+  if(!catId){itemSel.innerHTML='<option value="">— 先選類別 —</option>';return;}
+  const r=await fetch('/api/items_by_cat/'+catId); const items=await r.json();
+  itemSel.innerHTML='<option value="">— 選擇品項 —</option>'+items.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+}
+async function onItemChange(type){
+  const itemId=document.getElementById(type+'Item').value;
+  const brandSel=document.getElementById(type+'Brand');
+  brandSel.innerHTML='<option value="">載入中…</option>';
+  document.getElementById(type+'Spec').innerHTML='<option value="">— 先選品牌 —</option>';
+  if(!itemId){brandSel.innerHTML='<option value="">— 先選品項 —</option>';return;}
+  const r=await fetch('/api/brands_by_item/'+itemId); const brands=await r.json();
+  brandSel.innerHTML='<option value="">— 選擇品牌 —</option>'+brands.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+}
+async function onBrandChange(type){
+  const brandId=document.getElementById(type+'Brand').value;
+  const specSel=document.getElementById(type+'Spec');
+  if(!brandId){specSel.innerHTML='<option value="">— 先選品牌 —</option>';return;}
+  const r=await fetch('/api/specs_by_brand/'+brandId); const specs=await r.json();
+  specSel.innerHTML='<option value="">— 選擇規格 —</option>'+specs.map(s=>`<option value="${s.id}">${s.name}（現有 ${s.total_qty}）</option>`).join('');
+  if(type==='in') document.getElementById('inSpecId').value='';
+}
+document.getElementById('inSpec').addEventListener('change',function(){
+  document.getElementById('inSpecId').value=this.value;
 });
 
-function onCatChange() {
-  const catId = parseInt(document.getElementById('txnCat').value);
-  const itemSel = document.getElementById('txnItem');
-  const filtered = catId ? itemData.filter(i => i.catId === catId) : itemData;
-  itemSel.innerHTML = '<option value="">— 選擇品項 —</option>' +
-    filtered.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
-  document.getElementById('txnSpec').innerHTML = '<option value="">— 先選品項 —</option>';
-  document.getElementById('txnSpecId').value = '';
+// ── out modal ──
+async function openOutModal(){
+  const specId=document.getElementById('outSpec').value;
+  if(!specId){alert('請先選擇規格');return;}
+  const r=await fetch('/api/batches_by_spec/'+specId); const batches=await r.json();
+  if(!batches.length){alert('此規格尚無批次庫存');return;}
+  let html='';
+  batches.forEach((b,i)=>{
+    const exp=b.expiry_date?` · 到期：${b.expiry_date}${b.days_left<0?' (已過期)':b.days_left<=30?` (${b.days_left}天)`:''}` :'';
+    const note=b.note?` · ${b.note}`:'';
+    html+=`<label class="batch-select-row">
+      <input type="radio" name="batchRadio" value="${b.id}" ${i===0?'checked':''}>
+      <span style="flex:1;font-size:13px">庫存 <strong>${b.qty}</strong>${exp}${note}</span>
+    </label>`;
+  });
+  document.getElementById('batchList').innerHTML=html;
+  document.getElementById('outModal').classList.add('open');
+}
+function closeOutModal(){ document.getElementById('outModal').classList.remove('open'); }
+function submitOut(){
+  const sel=document.querySelector('input[name=batchRadio]:checked');
+  if(!sel){alert('請選擇批次');return;}
+  const qty=parseInt(document.getElementById('outQty').value)||0;
+  if(qty<1){alert('請輸入出庫數量');return;}
+  document.getElementById('outBatchId').value=sel.value;
+  document.getElementById('outQtyHidden').value=qty;
+  document.getElementById('outReasonHidden').value=document.getElementById('outReason').value;
+  document.getElementById('outForm').submit();
+  closeOutModal();
 }
 
-function onItemChange() {
-  const itemId = parseInt(document.getElementById('txnItem').value);
-  const item = itemData.find(i => i.id === itemId);
-  const specSel = document.getElementById('txnSpec');
-  if (!item) { specSel.innerHTML = '<option value="">— 先選品項 —</option>'; return; }
-  specSel.innerHTML = '<option value="">— 選擇規格 —</option>' +
-    item.specs.map(s => `<option value="${s.id}">${s.name}（現有 ${s.qty} ${s.unit}）</option>`).join('');
-  document.getElementById('txnSpecId').value = '';
-}
-
-function onSpecChange() {
-  document.getElementById('txnSpecId').value = document.getElementById('txnSpec').value;
-}
-
-function switchTab(tab, el) {
+// ── tabs ──
+function switchTab(tab,el){
   document.querySelectorAll('.atab').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(e=>e.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('panel-'+tab).classList.add('active');
+  el.classList.add('active'); document.getElementById('panel-'+tab).classList.add('active');
 }
-
-function filterTable() {
-  const q = document.getElementById('itemSearch').value.toLowerCase();
-  const cat = document.getElementById('catFilter').value;
-  document.querySelectorAll('#itemTable tbody tr').forEach(row => {
-    const name = (row.dataset.name||'').toLowerCase();
-    const rc = row.dataset.cat||'';
-    const mq = !q || name.includes(q);
-    const mc = !cat || rc === cat;
-    row.style.display = (mq && mc) ? '' : 'none';
+function filterTable(){
+  const q=document.getElementById('itemSearch').value.toLowerCase();
+  const cat=document.getElementById('catFilter').value;
+  document.querySelectorAll('#itemTable tbody tr').forEach(row=>{
+    const name=(row.dataset.name||'').toLowerCase(), rc=row.dataset.cat||'';
+    row.style.display=(!q||name.includes(q))&&(!cat||rc===cat)?'':'none';
   });
 }
 
-// ── Drag sort ──
-let dragEl = null;
-document.addEventListener('dragstart', e => {
-  if(e.target.classList.contains('sort-row')){
-    dragEl = e.target;
-    e.target.style.opacity = '0.5';
-  }
-});
-document.addEventListener('dragend', e => {
-  if(e.target.classList.contains('sort-row')){
-    e.target.style.opacity = '';
-    dragEl = null;
-  }
-});
-document.addEventListener('dragover', e => {
+// ── drag sort ──
+let dragEl=null;
+document.addEventListener('dragstart',e=>{if(e.target.classList.contains('sort-row')){dragEl=e.target;e.target.style.opacity='.5';}});
+document.addEventListener('dragend',e=>{if(e.target.classList.contains('sort-row')){e.target.style.opacity='';dragEl=null;}});
+document.addEventListener('dragover',e=>{
   e.preventDefault();
-  const row = e.target.closest('.sort-row');
-  if(!row || !dragEl || row === dragEl) return;
-
-  // 品項列：只能在同一類別群組內拖曳
-  if(dragEl.classList.contains('sort-item-row')){
-    if(dragEl.dataset.cat !== row.dataset.cat) return;
-  }
-
-  const container = row.parentNode;
-  const rows = [...container.querySelectorAll(':scope > .sort-row')];
-  const dragIdx = rows.indexOf(dragEl);
-  const overIdx = rows.indexOf(row);
-  if(dragIdx < overIdx) container.insertBefore(dragEl, row.nextSibling);
-  else container.insertBefore(dragEl, row);
+  const row=e.target.closest('.sort-row');
+  if(!row||!dragEl||row===dragEl)return;
+  if(dragEl.classList.contains('sort-item-row')&&dragEl.dataset.cat!==row.dataset.cat)return;
+  const c=row.parentNode, rows=[...c.querySelectorAll(':scope > .sort-row')];
+  const di=rows.indexOf(dragEl), oi=rows.indexOf(row);
+  if(di<oi)c.insertBefore(dragEl,row.nextSibling); else c.insertBefore(dragEl,row);
 });
-document.querySelectorAll('.sort-row').forEach(el => {
-  el.setAttribute('draggable', true);
-});
-
-async function saveSort(type) {
-  const containerId = type === 'item' ? 'sortItems' : 'sortCats';
-  const url = type === 'item' ? '/admin/sort/items' : '/admin/sort/categories';
-  const rows = document.querySelectorAll('#' + containerId + ' .sort-row');
-  const data = [...rows].map((r, i) => ({ id: parseInt(r.dataset.id), order: i }));
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(data)
-  });
-  if(res.ok){
-    const msg = document.getElementById('sortMsg');
-    msg.style.display = 'block';
-    setTimeout(() => msg.style.display = 'none', 3000);
-
-    // 如果是類別排序，即時更新右側品項預覽順序
-    if(type === 'cat'){
-      const wrap = document.getElementById('sortItemsWrap');
-      const catRows = document.querySelectorAll('#sortCats .sort-row');
-      catRows.forEach(catRow => {
-        const catId = catRow.dataset.id;
-        const group = wrap.querySelector(`.sort-item-group[data-cat-id="${catId}"]`);
-        if(group) wrap.appendChild(group.parentNode);
-      });
-    }
-  }
+async function saveSort(type){
+  const id=type==='cat'?'sortCats':'sortItems';
+  const url=type==='cat'?'/admin/sort/categories':'/admin/sort/items';
+  const rows=document.querySelectorAll('#'+id+' .sort-row');
+  const data=[...rows].map((r,i)=>({id:parseInt(r.dataset.id),order:i}));
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(res.ok){showSortMsg();}
 }
-
-async function saveSortItems() {
-  const rows = document.querySelectorAll('#sortItemsWrap .sort-item-row');
-  const data = [...rows].map((r, i) => ({ id: parseInt(r.dataset.id), order: i }));
-  const res = await fetch('/admin/sort/items', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(data)
-  });
-  if(res.ok){
-    const msg = document.getElementById('sortMsg');
-    msg.style.display = 'block';
-    setTimeout(() => msg.style.display = 'none', 3000);
-  }
+async function saveSortItems(){
+  const rows=document.querySelectorAll('#sortItemsWrap .sort-item-row');
+  const data=[...rows].map((r,i)=>({id:parseInt(r.dataset.id),order:i}));
+  const res=await fetch('/admin/sort/items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(res.ok){showSortMsg();}
+}
+function showSortMsg(){
+  const m=document.getElementById('sortMsg'); m.style.display='block';
+  setTimeout(()=>m.style.display='none',3000);
 }
 </script>
 {% endblock %}

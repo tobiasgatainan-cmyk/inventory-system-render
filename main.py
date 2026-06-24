@@ -603,19 +603,26 @@ def api_low_stock():
 
 # ── Bootstrap ─────────────────────────────────────────────
 with app.app_context():
-    # 檢查是否需要重建（偵測新架構的 batches 表是否存在）
+    # 支援強制重建（環境變數 FORCE_DB_RESET=1）
+    force_reset = os.environ.get('FORCE_DB_RESET', '0') == '1'
+
+    # 檢查是否需要重建
     with db.engine.connect() as conn:
         from sqlalchemy import text, inspect
         inspector = inspect(db.engine)
         existing_tables = inspector.get_table_names()
-        needs_rebuild = 'batches' not in existing_tables
+        has_batches  = 'batches' in existing_tables
+        has_batch_id = False
+        if 'stock_logs' in existing_tables:
+            cols = [c['name'] for c in inspector.get_columns('stock_logs')]
+            has_batch_id = 'batch_id' in cols
+        needs_rebuild = force_reset or not has_batches or not has_batch_id
 
     if needs_rebuild:
         db.drop_all()
         db.create_all()
     else:
         db.create_all()
-        # 舊有遷移
         with db.engine.connect() as conn:
             for sql in [
                 "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",

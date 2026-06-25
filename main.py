@@ -501,10 +501,13 @@ def stock_in():
         try: cost = float(cost_str)
         except ValueError: pass
 
-    # Try to merge with existing batch of same expiry (or no expiry)
+    # 四個欄位全部相同才合併：到期日、進價、備註、規格名稱
     existing = None
     for b in spec.batches:
-        if b.expiry_date == exp:
+        same_exp  = b.expiry_date == exp
+        same_cost = str(b.cost_price or '') == str(cost or '')
+        same_note = (b.note or '') == (note or '')
+        if same_exp and same_cost and same_note:
             existing = b; break
 
     if existing:

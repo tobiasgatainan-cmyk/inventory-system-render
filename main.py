@@ -582,11 +582,10 @@ def stock_in():
     db.session.add(log); db.session.commit()
 
     try:
-        from gsheet import append_log_row
+        from gsheet import append_log_row, append_purchase_record
         append_log_row(batch, qty, reason, current_user.username)
+        append_purchase_record(batch, current_user.username)
     except Exception: pass
-
-    flash(f'入庫成功（+{qty}）', 'success')
     return redirect(request.referrer or url_for('admin_items'))
 
 
@@ -605,6 +604,10 @@ def stock_out():
         return redirect(request.referrer or url_for('admin_items'))
 
     batch.qty -= qty
+    if batch.qty == 0:
+        batch.expiry_date = None
+        batch.cost_price  = None
+        batch.note        = None
     log = StockLog(batch_id=batch_id, change=-qty, reason=reason, user_id=current_user.id)
     db.session.add(log); db.session.commit()
 
@@ -710,16 +713,19 @@ def cart_add():
     data     = request.get_json()
     item_id  = data.get('item_id')
     qty      = int(data.get('qty', 1))
-    today    = now_tw().date()
+    brand_filter = data.get('brand', None)
+    spec_filter  = data.get('spec', None)
 
     item = Item.query.get(item_id)
     if not item:
         return jsonify({'ok': False, 'msg': '品項不存在'})
 
-    # 收集所有批次，依到期日排序（最近到期優先，無到期日排最後）
+    # 收集符合條件的批次，依到期日排序（FEFO）
     all_batches = []
     for brand in item.brands:
+        if brand_filter and brand.name != brand_filter: continue
         for spec in brand.specs:
+            if spec_filter and spec.name != spec_filter: continue
             for batch in spec.batches:
                 if batch.available_qty > 0:
                     all_batches.append(batch)
@@ -729,9 +735,12 @@ def cart_add():
     ))
 
     if not all_batches:
-        total_qty = item.total_qty
+        total_available = sum(
+            b.available_qty for brand in item.brands
+            for spec in brand.specs for b in spec.batches
+        ) if not (brand_filter or spec_filter) else 0
         return jsonify({'ok': False, 'insufficient': True,
-                        'available': total_qty, 'msg': f'目前庫存為 {total_qty}'})
+                        'available': 0, 'msg': '目前無庫存'})
 
     total_available = sum(b.available_qty for b in all_batches)
     if qty > total_available:
@@ -739,29 +748,28 @@ def cart_add():
                         'available': total_available,
                         'msg': f'庫存不足，目前可申請 {total_available} 個'})
 
-    # 分配到批次（FEFO: First Expire First Out）
     cart = session.get('cart', [])
     remaining = qty
-    added = []
     for batch in all_batches:
         if remaining <= 0: break
         take = min(remaining, batch.available_qty)
-        # 檢查購物車是否已有此批次
         found = False
         for entry in cart:
             if entry['batch_id'] == batch.id:
-                entry['qty'] += take
-                found = True
-                break
+                entry['qty'] += take; found = True; break
         if not found:
             cart.append({'batch_id': batch.id, 'qty': take})
         remaining -= take
-        added.append({'batch_id': batch.id, 'qty': take})
 
     session['cart'] = cart
     session.modified = True
-    return jsonify({'ok': True, 'added': added,
-                    'cart_count': sum(e['qty'] for e in cart)})
+    return jsonify({'ok': True, 'cart_count': sum(e['qty'] for e in cart)})
+
+
+@app.route('/api/cart-count')
+def api_cart_count():
+    cart = session.get('cart', [])
+    return jsonify({'count': sum(e['qty'] for e in cart)})
 
 
 @app.route('/cart/update', methods=['POST'])
@@ -909,8 +917,13 @@ def admin_order_confirm(oid):
             flash(f'{oi.item_name} 庫存不足（現有 {batch.qty}，申請 {qty}）', 'danger')
             return redirect(url_for('admin_order_detail', oid=oid))
         batch.qty -= qty
+        # 問題7：歸零後保留一列空白批次（清空到期日/進價/備註）
+        if batch.qty == 0:
+            batch.expiry_date = None
+            batch.cost_price  = None
+            batch.note        = None
         log = StockLog(batch_id=batch.id, change=-qty,
-                       reason=f'申請單 {order.order_no} / {order.applicant}',
+                       reason=f'申請單 {order.order_no}／{order.applicant}',
                        user_id=current_user.id)
         db.session.add(log)
         try:

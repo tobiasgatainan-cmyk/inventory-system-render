@@ -21,15 +21,14 @@ def _client():
 def _sheet(tab):
     gc = _client(); sh = gc.open_by_key(SHEET_ID)
     try: return sh.worksheet(tab)
-    except gspread.WorksheetNotFound: return sh.add_worksheet(title=tab, rows=1000, cols=20)
+    except gspread.WorksheetNotFound: return sh.add_worksheet(title=tab, rows=2000, cols=20)
 
 
 # ── Full sync ─────────────────────────────────────────────
 def full_sync():
-    from main import Item, Brand, Spec, Batch, Category
+    from main import Item, Category
     ws = _sheet('庫存')
 
-    # 讀取現有資料，記錄最後同步時間（只有數量變化才更新）
     existing = {}
     try:
         for r in ws.get_all_records():
@@ -65,21 +64,69 @@ def full_sync():
     return f'已寫入 {len(rows)-1} 筆'
 
 
-# ── Append log ────────────────────────────────────────────
+# ── Append log row ────────────────────────────────────────
 def append_log_row(batch, change, reason, username):
+    """修復：每次都確認標題列，然後在最後一行後 append"""
     ws  = _sheet('異動紀錄')
     now = now_tw().strftime('%Y-%m-%d %H:%M:%S')
+
+    HEADERS = ['時間','品項','品牌','規格','批次到期日','異動','理由','進價','操作人']
+
+    # 確認第一列是標題列（如果空的或標題不對就重設）
+    try:
+        first_row = ws.row_values(1)
+    except Exception:
+        first_row = []
+
+    if first_row != HEADERS:
+        ws.clear()
+        ws.append_row(HEADERS)
+
     spec  = batch.spec
     brand = spec.brand
     item  = brand.item
-    if ws.row_count < 1 or ws.cell(1,1).value != '時間':
-        ws.insert_row(['時間','品項','品牌','規格','批次到期日','異動','理由','進價','操作人'], index=1)
     ws.append_row([
-        now, item.name, brand.name, spec.name,
+        now,
+        item.name,
+        brand.name,
+        spec.name,
         batch.expiry_date.isoformat() if batch.expiry_date else '',
         f'+{change}' if change > 0 else str(change),
         reason,
         float(batch.cost_price) if batch.cost_price else '',
+        username,
+    ])
+
+
+# ── Append purchase record ────────────────────────────────
+def append_purchase_record(batch, username):
+    """入庫時記錄進貨歷史"""
+    ws  = _sheet('進貨記錄')
+    now = now_tw().strftime('%Y-%m-%d %H:%M')
+
+    HEADERS = ['時間','品項','品牌','規格','入庫數量','到期日','進價','備註','操作人']
+
+    try:
+        first_row = ws.row_values(1)
+    except Exception:
+        first_row = []
+
+    if first_row != HEADERS:
+        ws.clear()
+        ws.append_row(HEADERS)
+
+    spec  = batch.spec
+    brand = spec.brand
+    item  = brand.item
+    ws.append_row([
+        now,
+        item.name,
+        brand.name,
+        spec.name,
+        batch.qty,
+        batch.expiry_date.isoformat() if batch.expiry_date else '',
+        float(batch.cost_price) if batch.cost_price else '',
+        batch.note or '',
         username,
     ])
 

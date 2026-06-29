@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}美善基金會庫存系統{% endblock %}
+{% block content %}
+<div class="container" style="max-width:800px">
+<style>
+.detail-card{background:#fff;border-radius:10px;padding:20px;border:1px solid #edddd0;margin-bottom:16px}
+.detail-title{font-size:14px;font-weight:700;color:#a8958c;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px}
+.info-row{display:flex;flex-direction:column;gap:3px}
+.info-label{color:#a8958c;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.info-value{font-weight:600;color:#2a1f1a}
+.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-pending{background:#fff8e8;color:#d97b2a;border:1px solid #f0b87a}
+.badge-confirmed{background:#edf7f1;color:#4a9e6b;border:1px solid #8ecaaa}
+.badge-cancelled{background:#f7f7f7;color:#a8958c;border:1px solid #ddd}
+.item-row{background:#fdf6f0;border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.item-name{font-size:14px;font-weight:700;margin-bottom:6px}
+.item-meta{font-size:12px;color:#6b5a52;margin-bottom:8px}
+.exp-soon{color:#d97b2a;font-weight:700}
+.exp-past{color:#d94f55;font-weight:700}
+.adj-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.fi{padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;background:white;outline:none}
+.fi:focus{border-color:#fe7b81}
+.confirm-bar{background:#edf7f1;border:1px solid #8ecaaa;border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.btn{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;text-decoration:none;display:inline-block}
+.btn-success{background:#4a9e6b;color:white}.btn-success:hover{background:#3d8a5c}
+.btn-primary{background:#fe7b81;color:white}.btn-primary:hover{background:#e55e65}
+.btn-secondary{background:#f0f0f0;color:#333}.btn-secondary:hover{background:#e0e0e0}
+.btn-danger{background:#dc3545;color:white}
+</style>
+
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+  <a href="{{ url_for('admin_orders') }}" style="color:#fe7b81;font-size:13px;text-decoration:none">← 返回申請單列表</a>
+</div>
+
+<!-- 申請單資訊 -->
+<div class="detail-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div>
+      <span style="font-size:16px;font-weight:700;color:#fe7b81">{{ order.order_no }}</span>
+      <span class="badge badge-{{ order.status }}" style="margin-left:10px">
+        {% if order.status=='pending' %}待處理{% elif order.status=='confirmed' %}已出貨{% else %}已取消{% endif %}
+      </span>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-row">
+      <span class="info-label">申請人</span>
+      <span class="info-value">{{ order.applicant }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">申請時間</span>
+      <span class="info-value">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </div>
+    {% if order.confirmed_at %}
+    <div class="info-row">
+      <span class="info-label">出貨時間</span>
+      <span class="info-value">{{ order.confirmed_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </div>
+    {% endif %}
+    {% if order.note %}
+    <div class="info-row" style="grid-column:1/-1">
+      <span class="info-label">備註</span>
+      <span class="info-value">{{ order.note }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 品項列表（可調整） -->
+{% if order.status == 'pending' %}
+<form method="POST" action="{{ url_for('admin_order_update', oid=order.id) }}" id="updateForm">
+{% endif %}
+
+<div class="detail-card">
+  <div class="detail-title">📦 申請品項</div>
+
+  {% for oi in order.items %}
+  {% set today_str = today.isoformat() %}
+  <div class="item-row">
+    <div class="item-name">{{ oi.item_name }}</div>
+    <div class="item-meta">
+      品牌：{{ oi.brand_name }} ／ 規格：{{ oi.spec_name }} ／
+      到期日：
+      {% if oi.expiry_str != '—' %}
+        <span class="{% if oi.expiry_str <= today_str %}exp-past{% elif oi.expiry_str <= today.strftime('%Y-%m-%d') %}exp-soon{% endif %}">
+          {{ oi.expiry_str }}
+        </span>
+      {% else %}—{% endif %}
+      ／ 申請數量：<strong>{{ oi.qty_request }}</strong>
+    </div>
+
+    {% if order.status == 'pending' %}
+    <div class="adj-row">
+      <div>
+        <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">實際出貨數量</label>
+        <input type="number" name="qty_{{ oi.id }}" value="{{ oi.qty_actual or oi.qty_request }}"
+               min="0" max="{{ oi.batch.qty }}" class="fi" style="width:80px">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">
+          出貨批次 <span style="font-weight:400">（可換成更近到期的批次）</span>
+        </label>
+        <select name="batch_{{ oi.id }}" class="fi" style="width:100%;max-width:380px">
+          {% for b in oi._available_batches %}
+          {% set days = (b.expiry_date - today).days if b.expiry_date else None %}
+          <option value="{{ b.id }}" {% if b.id == oi.batch_id %}selected{% endif %}>
+            {{ b.spec.brand.name }} / {{ b.spec.name }} ／
+            到期：{% if b.expiry_date %}{{ b.expiry_date.isoformat() }}
+              {% if days is not none %}({% if days < 0 %}已過期{% elif days == 0 %}今天{% else %}{{ days }}天{% endif %}){% endif %}
+            {% else %}無{% endif %} ／
+            庫存 {{ b.qty }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% else %}
+    <div style="font-size:12px;color:#a8958c">
+      實際出貨：<strong style="color:#333">{{ oi.qty_actual or oi.qty_request }}</strong>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% if order.status == 'pending' %}
+  <div style="text-align:right;margin-top:12px">
+    <button type="submit" class="btn btn-primary">💾 儲存調整</button>
+  </div>
+  {% endif %}
+</div>
+{% if order.status == 'pending' %}</form>{% endif %}
+
+<!-- 確認出貨 -->
+{% if order.status == 'pending' %}
+<div class="confirm-bar">
+  <div>
+    <div style="font-weight:700;color:#4a9e6b;font-size:14px">✅ 確認後將實際扣除庫存</div>
+    <div style="font-size:12px;color:#a8958c;margin-top:2px">請確認數量與批次無誤後再確認出貨</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <form method="POST" action="{{ url_for('admin_order_cancel', oid=order.id) }}"
+          onsubmit="return confirm('確定取消此申請單？')">
+      <button type="submit" class="btn btn-secondary">✕ 取消申請</button>
+    </form>
+    <form method="POST" action="{{ url_for('admin_order_confirm', oid=order.id) }}"
+          onsubmit="return confirm('確認出貨後將扣除庫存，無法復原，確定嗎？')">
+      <button type="submit" class="btn btn-success">🚚 確認出貨</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

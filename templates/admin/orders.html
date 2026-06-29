@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}美善基金會庫存系統{% endblock %}
+{% block content %}
+<div class="container">
+<style>
+.status-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid #edddd0}
+.stab{padding:8px 16px;border:none;background:transparent;font-size:13px;font-weight:600;color:#a8958c;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.stab:hover{color:#333}.stab.active{color:#fe7b81;border-bottom-color:#fe7b81}
+.order-card{background:#fff;border:1px solid #edddd0;border-radius:10px;padding:16px;margin-bottom:12px;transition:.15s}
+.order-card:hover{border-color:#e0c8b8;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.order-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.order-no{font-size:13px;font-weight:700;color:#fe7b81}
+.order-time{font-size:12px;color:#a8958c}
+.order-applicant{font-size:15px;font-weight:700;margin-bottom:4px}
+.order-items-preview{font-size:12px;color:#6b5a52;margin-bottom:10px}
+.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-pending{background:#fff8e8;color:#d97b2a;border:1px solid #f0b87a}
+.badge-confirmed{background:#edf7f1;color:#4a9e6b;border:1px solid #8ecaaa}
+.badge-cancelled{background:#f7f7f7;color:#a8958c;border:1px solid #ddd}
+.btn-sm{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;border:none;display:inline-block}
+.btn-primary{background:#fe7b81;color:white}.btn-primary:hover{background:#e55e65}
+.btn-secondary{background:#f0f0f0;color:#333}.btn-secondary:hover{background:#e0e0e0}
+.empty-state{text-align:center;padding:48px;color:#a8958c}
+.pending-badge{background:#fe7b81;color:white;border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px}
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <h1 style="font-size:20px;font-weight:700;color:#c0474d">📋 申請單管理</h1>
+</div>
+
+<div class="status-tabs">
+  <a href="{{ url_for('admin_orders', status='pending') }}"
+     class="stab {% if status=='pending' %}active{% endif %}">
+    待處理{% if pending_count %}<span class="pending-badge">{{ pending_count }}</span>{% endif %}
+  </a>
+  <a href="{{ url_for('admin_orders', status='confirmed') }}"
+     class="stab {% if status=='confirmed' %}active{% endif %}">已出貨</a>
+  <a href="{{ url_for('admin_orders', status='cancelled') }}"
+     class="stab {% if status=='cancelled' %}active{% endif %}">已取消</a>
+</div>
+
+{% if orders %}
+{% for order in orders %}
+<div class="order-card">
+  <div class="order-header">
+    <div>
+      <span class="order-no">{{ order.order_no }}</span>
+      <span class="badge badge-{{ order.status }}" style="margin-left:8px">
+        {% if order.status=='pending' %}待處理{% elif order.status=='confirmed' %}已出貨{% else %}已取消{% endif %}
+      </span>
+    </div>
+    <span class="order-time">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+  </div>
+  <div class="order-applicant">👤 {{ order.applicant }}</div>
+  <div class="order-items-preview">
+    {% for oi in order.items %}
+    {{ oi.item_name }} × {{ oi.qty_request }}{% if not loop.last %} ／ {% endif %}
+    {% endfor %}
+  </div>
+  {% if order.note %}
+  <div style="font-size:12px;color:#a8958c;margin-bottom:8px">備註：{{ order.note }}</div>
+  {% endif %}
+  <div style="display:flex;gap:8px">
+    <a href="{{ url_for('admin_order_detail', oid=order.id) }}" class="btn-sm btn-primary">查看詳情</a>
+    {% if order.status == 'pending' %}
+    <form method="POST" action="{{ url_for('admin_order_cancel', oid=order.id) }}" style="display:inline"
+          onsubmit="return confirm('確定取消此申請單？')">
+      <button type="submit" class="btn-sm btn-secondary">取消申請</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+  <div style="font-size:40px;margin-bottom:12px">📭</div>
+  <div>目前沒有{% if status=='pending' %}待處理{% elif status=='confirmed' %}已出貨{% else %}已取消{% endif %}的申請單</div>
+</div>
+{% endif %}
+</div>
+{% endblock %}

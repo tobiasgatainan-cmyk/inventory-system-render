@@ -13,7 +13,7 @@
 <table>
   <thead>
     <tr>
-      <th>帳號</th><th>Email</th><th>角色</th><th>建立時間</th><th>操作</th>
+      <th>帳號</th><th>Email</th><th>角色</th><th>通知信箱</th><th>接收通知</th><th>建立時間</th><th>操作</th>
     </tr>
   </thead>
   <tbody>
@@ -26,9 +26,13 @@
       {% elif u.role == 'editor' %}<span style="color:#28a745;font-weight:600">編輯者</span>
       {% else %}<span style="color:#888">檢視者</span>{% endif %}
     </td>
+    <td style="font-size:12px">{{ u.notify_email or '—' }}</td>
+    <td style="text-align:center">{{ '✅' if u.notify_on else '—' }}</td>
     <td style="font-size:12px;color:#aaa">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
     <td>
       <a href="{{ url_for('admin_edit_user', uid=u.id) }}" class="btn btn-sm btn-secondary">編輯</a>
+      <button onclick="openNotify({{ u.id }}, '{{ u.notify_email or '' }}', {{ 'true' if u.notify_on else 'false' }})"
+              class="btn btn-sm" style="background:#e8f0fe;color:#1a73e8;border:1px solid #a8c7fa">🔔 通知</button>
       {% if u.id != current_user.id %}
       <form method="POST" action="{{ url_for('admin_delete_user', uid=u.id) }}" style="display:inline"
             onsubmit="return confirm('確定刪除 {{ u.username }}？')">
@@ -41,6 +45,38 @@
   </tbody>
 </table>
 </div>
+
+<!-- 通知設定 modal -->
+<div id="notifyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:14px;padding:24px;width:380px;max-width:95vw">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">🔔 通知設定</h3>
+    <form method="POST" id="notifyForm">
+      <div class="form-group">
+        <label>通知信箱</label>
+        <input type="email" name="notify_email" id="notifyEmail" placeholder="填入接收通知的信箱">
+        <div style="font-size:11px;color:#aaa;margin-top:4px">更改信箱時會自動寄送測試信</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <input type="checkbox" name="notify_on" id="notifyOn" style="width:16px;height:16px">
+        <label for="notifyOn" style="margin:0;font-weight:400">有新申請單時寄信通知</label>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" onclick="closeNotify()" class="btn btn-secondary">取消</button>
+        <button type="submit" class="btn btn-primary">儲存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openNotify(uid, email, on){
+  document.getElementById('notifyEmail').value = email;
+  document.getElementById('notifyOn').checked = on;
+  document.getElementById('notifyForm').action = `/admin/users/${uid}/notify`;
+  document.getElementById('notifyModal').style.display = 'flex';
+}
+function closeNotify(){ document.getElementById('notifyModal').style.display = 'none'; }
+</script>
 
 <div class="card" style="background:#ffeaeb;border:1px solid #f5c6cb;margin-top:8px">
   <p style="font-size:13px;color:#c0474d">

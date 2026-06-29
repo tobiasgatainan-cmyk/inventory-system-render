@@ -80,7 +80,7 @@
   <div class="item-row">
     <div class="item-name">{{ oi.item_name }}</div>
     <div class="item-meta">
-      品牌：{{ oi.brand_name }} ／ 規格：{{ oi.spec_name }} ／
+      品牌：{{ oi.brand_name }}／規格：{{ oi.spec_name }}／
       到期日：
       {% if oi.expiry_str != '—' %}
         <span class="{% if oi.expiry_str <= today_str %}exp-past{% elif oi.expiry_str <= today.strftime('%Y-%m-%d') %}exp-soon{% endif %}">
@@ -105,11 +105,7 @@
           {% for b in oi._available_batches %}
           {% set days = (b.expiry_date - today).days if b.expiry_date else None %}
           <option value="{{ b.id }}" {% if b.id == oi.batch_id %}selected{% endif %}>
-            {{ b.spec.brand.name }} / {{ b.spec.name }} ／
-            到期：{% if b.expiry_date %}{{ b.expiry_date.isoformat() }}
-              {% if days is not none %}({% if days < 0 %}已過期{% elif days == 0 %}今天{% else %}{{ days }}天{% endif %}){% endif %}
-            {% else %}無{% endif %} ／
-            庫存 {{ b.qty }}
+            {{ b.spec.brand.name }}／{{ b.spec.name }}／到期：{% if b.expiry_date %}{{ b.expiry_date.isoformat() }}{% if days is not none %}（{% if days < 0 %}已過期{% elif days == 0 %}今天{% else %}{{ days }}天{% endif %}）{% endif %}{% else %}無{% endif %}／庫存 {{ b.qty }}
           </option>
           {% endfor %}
         </select>

@@ -80,7 +80,7 @@
     <h1>庫存 <span>總覽</span></h1>
     <div style="display:flex;gap:8px;align-items:center">
       <a href="{{ url_for('cart') }}" style="padding:7px 14px;background:#fff;color:#fe7b81;border:2px solid #fe7b81;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none" id="cartBtn">
-        🛒 申請購物車
+        🛒 購物車
       </a>
       {% if current_user.is_authenticated and current_user.can_edit() %}
       <a href="{{ url_for('admin_items') }}" style="padding:7px 14px;background:var(--accent);color:#fff;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none">⚙️ 進入後台</a>
@@ -134,13 +134,13 @@
           <span class="item-unit">{{ item.unit }}</span>
         </div>
         {% if st in ('low','out') %}<div class="warn-label">⚠ 庫存即將不足</div>{% endif %}
+
+        {# 規格選擇器（展開時顯示） #}
         <div style="display:flex;gap:6px;margin-top:8px" onclick="event.stopPropagation()">
-          <button onclick="addToCart({{ item.id }}, 1, this)"
+          <button onclick="openSpecModal({{ item.id }}, this)"
             style="flex:1;padding:6px;background:#fe7b81;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
-            ＋ 加入申請
+            ＋ 加入購物車
           </button>
-          <input type="number" id="qty-{{ item.id }}" value="1" min="1" max="{{ item.total_qty }}"
-            style="width:52px;padding:6px;border:1px solid #edddd0;border-radius:6px;font-size:12px;text-align:center">
         </div>
         <div class="expand-hint">▼ 點擊卡片查看明細</div>
         <div class="item-expand" id="expand-{{ item.id }}">
@@ -166,7 +166,7 @@ function toggleExpand(card){
   const hint  = card.querySelector('.expand-hint');
   if(panel.classList.contains('open')){
     panel.classList.remove('open');
-    hint.textContent='▼ 點擊查看明細';
+    hint.textContent='▼ 點擊卡片查看明細';
     return;
   }
   panel.classList.add('open');
@@ -175,23 +175,23 @@ function toggleExpand(card){
   fetch('/api/item/'+id)
     .then(r=>r.json())
     .then(data=>{
-      if(!data.batches.length){ panel.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">尚無批次資料</div>'; return; }
-      const today=new Date();
+      // 只顯示 qty > 0 的批次
+      const visible = data.batches.filter(b => b.qty > 0);
+      if(!visible.length){ panel.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">尚無可用庫存</div>'; return; }
       let html='';
-      data.batches.forEach(b=>{
+      visible.forEach(b=>{
         let expHtml='';
         if(b.expiry_date){
-          const exp=new Date(b.expiry_date);
           const cls=b.days_left<0?'exp-past':b.days_left<=30?'exp-soon':'exp-ok';
           const label=b.days_left<0?'已過期':b.days_left===0?'今天到期':b.days_left+'天後到期';
           expHtml=`<span class="batch-exp ${cls}">${b.expiry_date} (${label})</span>`;
         }
+        // 不顯示備註和進價
         html+=`<div class="batch-row">
           <span class="batch-brand">${b.brand}</span>
           <span class="batch-spec">${b.spec}</span>
-          <span class="batch-qty" style="color:${b.qty===0?'var(--out)':b.qty<=3?'var(--low)':'var(--ok)'}">${b.qty}${b.unit}</span>
+          <span class="batch-qty" style="color:${b.qty<=3?'var(--low)':'var(--ok)'}">${b.qty}${b.unit}</span>
           ${expHtml}
-          ${b.note?`<span style="font-size:11px;color:var(--text3)">${b.note}</span>`:''}
         </div>`;
       });
       expandCache[id]=html;
@@ -231,41 +231,121 @@ function filterItems(){
     countEl.textContent=cat===''?visible:(catCounts[cat]||0);
   });
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
-}async function addToCart(itemId, defaultQty, btn){
-  const qtyInput = document.getElementById('qty-'+itemId);
-  const qty = parseInt(qtyInput ? qtyInput.value : defaultQty) || 1;
-  btn.disabled = true; btn.textContent = '加入中…';
+}<!-- 規格選擇 Modal -->
+<div id="specModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:14px;padding:24px;width:420px;max-width:95vw;max-height:80vh;overflow-y:auto">
+    <h3 id="specModalTitle" style="font-size:16px;font-weight:700;margin-bottom:4px;color:#2a1f1a"></h3>
+    <p style="font-size:12px;color:#a8958c;margin-bottom:16px">請選擇規格與數量加入購物車</p>
+    <div id="specList"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button onclick="closeSpecModal()" style="padding:8px 16px;border:1px solid #ddd;background:white;border-radius:7px;cursor:pointer;font-size:13px">取消</button>
+      <button onclick="confirmSpecAdd()" style="padding:8px 16px;background:#fe7b81;color:white;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700">加入購物車</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentItemId = null;
+let specData = [];
+
+async function openSpecModal(itemId, btn){
+  currentItemId = itemId;
+  btn.disabled = true; btn.textContent = '載入中…';
   try {
-    const r = await fetch('/cart/add', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({item_id: itemId, qty: qty})
-    });
+    const r = await fetch('/api/item/'+itemId);
     const data = await r.json();
-    if(data.ok){
-      btn.textContent = '✓ 已加入';
-      btn.style.background = 'var(--ok)';
-      setTimeout(()=>{ btn.textContent='＋ 加入申請'; btn.style.background='#fe7b81'; btn.disabled=false; }, 1500);
-      const cartBtn = document.getElementById('cartBtn');
-      if(cartBtn && data.cart_count > 0){
-        cartBtn.textContent = `🛒 申請購物車（${data.cart_count}）`;
-      }
-    } else if(data.insufficient){
-      const avail = data.available;
-      if(avail > 0){
-        if(confirm(`庫存不足！目前可申請 ${avail} 個，是否加入現有量？`)){
-          if(qtyInput) qtyInput.value = avail;
-          btn.disabled = false;
-          addToCart(itemId, avail, btn);
-          return;
-        }
-      } else {
-        alert('此品項目前無庫存可申請');
-      }
-      btn.textContent='＋ 加入申請'; btn.style.background='#fe7b81'; btn.disabled=false;
+    // 整理規格清單（依品牌+規格名稱分組，合計 qty > 0 才顯示）
+    const specMap = {};
+    data.batches.forEach(b => {
+      if(b.qty <= 0) return;
+      const key = b.brand + '／' + b.spec;
+      if(!specMap[key]) specMap[key] = {brand: b.brand, spec: b.spec, total: 0};
+      specMap[key].total += b.qty;
+    });
+    specData = Object.values(specMap);
+
+    document.getElementById('specModalTitle').textContent = data.item;
+    const list = document.getElementById('specList');
+
+    if(specData.length === 0){
+      list.innerHTML = '<p style="color:#a8958c;text-align:center;padding:16px">目前無可用庫存</p>';
+    } else if(specData.length === 1){
+      // 只有一種規格，直接加入
+      closeSpecModal();
+      btn.disabled = false; btn.textContent = '＋ 加入購物車';
+      await addToCartBySpec(itemId, specData[0].brand, specData[0].spec, 1, btn);
+      return;
+    } else {
+      list.innerHTML = specData.map((s, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #edddd0;border-radius:8px;margin-bottom:8px">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">${s.spec}</div>
+            <div style="font-size:11px;color:#a8958c">${s.brand} ／ 可申請 ${s.total}</div>
+          </div>
+          <input type="number" id="spec-qty-${i}" value="1" min="0" max="${s.total}"
+            style="width:60px;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;text-align:center">
+        </div>
+      `).join('');
     }
+
+    document.getElementById('specModal').style.display = 'flex';
   } catch(e) {
-    btn.textContent='＋ 加入申請'; btn.style.background='#fe7b81'; btn.disabled=false;
+    alert('載入失敗，請重試');
   }
+  btn.disabled = false; btn.textContent = '＋ 加入購物車';
 }
-</script>
+
+function closeSpecModal(){
+  document.getElementById('specModal').style.display = 'none';
+  currentItemId = null; specData = [];
+}
+
+async function confirmSpecAdd(){
+  let hasAny = false;
+  for(let i=0; i<specData.length; i++){
+    const qty = parseInt(document.getElementById('spec-qty-'+i)?.value) || 0;
+    if(qty > 0) hasAny = true;
+  }
+  if(!hasAny){ alert('請至少輸入一個規格的數量'); return; }
+
+  for(let i=0; i<specData.length; i++){
+    const qty = parseInt(document.getElementById('spec-qty-'+i)?.value) || 0;
+    if(qty <= 0) continue;
+    await addToCartBySpec(currentItemId, specData[i].brand, specData[i].spec, qty, null);
+  }
+  closeSpecModal();
+  // 更新購物車數字
+  updateCartCount();
+}
+
+async function addToCartBySpec(itemId, brand, spec, qty, btn){
+  const r = await fetch('/cart/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({item_id: itemId, brand: brand, spec: spec, qty: qty})
+  });
+  const data = await r.json();
+  if(!data.ok && data.insufficient){
+    const avail = data.available;
+    if(avail > 0){
+      if(confirm(`庫存不足！目前可申請 ${avail} 個，是否加入現有量？`)){
+        await fetch('/cart/add', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({item_id: itemId, brand: brand, spec: spec, qty: avail})
+        });
+      }
+    } else { alert('此規格目前無庫存'); }
+  }
+  return data;
+}
+
+async function updateCartCount(){
+  const r = await fetch('/api/cart-count');
+  const data = await r.json();
+  const btn = document.getElementById('cartBtn');
+  if(btn) btn.textContent = data.count > 0 ? `🛒 購物車（${data.count}）` : '🛒 購物車';
+}
+
+// 初始化購物車數量
+updateCartCount();
+
 {% endblock %}

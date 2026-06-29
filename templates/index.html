@@ -78,9 +78,14 @@
 <div class="inv-header">
   <div class="inv-header-top">
     <h1>庫存 <span>總覽</span></h1>
-    {% if current_user.is_authenticated and current_user.can_edit() %}
-    <a href="{{ url_for('admin_items') }}" style="padding:7px 14px;background:var(--accent);color:#fff;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none">⚙️ 進入後台</a>
-    {% endif %}
+    <div style="display:flex;gap:8px;align-items:center">
+      <a href="{{ url_for('cart') }}" style="padding:7px 14px;background:#fff;color:#fe7b81;border:2px solid #fe7b81;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none" id="cartBtn">
+        🛒 申請購物車
+      </a>
+      {% if current_user.is_authenticated and current_user.can_edit() %}
+      <a href="{{ url_for('admin_items') }}" style="padding:7px 14px;background:var(--accent);color:#fff;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none">⚙️ 進入後台</a>
+      {% endif %}
+    </div>
   </div>
   <div class="search-bar">
     <span class="search-icon">🔍</span>
@@ -129,7 +134,15 @@
           <span class="item-unit">{{ item.unit }}</span>
         </div>
         {% if st in ('low','out') %}<div class="warn-label">⚠ 庫存即將不足</div>{% endif %}
-        <div class="expand-hint">▼ 點擊查看明細</div>
+        <div style="display:flex;gap:6px;margin-top:8px" onclick="event.stopPropagation()">
+          <button onclick="addToCart({{ item.id }}, 1, this)"
+            style="flex:1;padding:6px;background:#fe7b81;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+            ＋ 加入申請
+          </button>
+          <input type="number" id="qty-{{ item.id }}" value="1" min="1" max="{{ item.total_qty }}"
+            style="width:52px;padding:6px;border:1px solid #edddd0;border-radius:6px;font-size:12px;text-align:center">
+        </div>
+        <div class="expand-hint">▼ 點擊卡片查看明細</div>
         <div class="item-expand" id="expand-{{ item.id }}">
           <div class="expand-loading">載入中…</div>
         </div>
@@ -218,6 +231,41 @@ function filterItems(){
     countEl.textContent=cat===''?visible:(catCounts[cat]||0);
   });
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
+}async function addToCart(itemId, defaultQty, btn){
+  const qtyInput = document.getElementById('qty-'+itemId);
+  const qty = parseInt(qtyInput ? qtyInput.value : defaultQty) || 1;
+  btn.disabled = true; btn.textContent = '加入中…';
+  try {
+    const r = await fetch('/cart/add', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({item_id: itemId, qty: qty})
+    });
+    const data = await r.json();
+    if(data.ok){
+      btn.textContent = '✓ 已加入';
+      btn.style.background = 'var(--ok)';
+      setTimeout(()=>{ btn.textContent='＋ 加入申請'; btn.style.background='#fe7b81'; btn.disabled=false; }, 1500);
+      const cartBtn = document.getElementById('cartBtn');
+      if(cartBtn && data.cart_count > 0){
+        cartBtn.textContent = `🛒 申請購物車（${data.cart_count}）`;
+      }
+    } else if(data.insufficient){
+      const avail = data.available;
+      if(avail > 0){
+        if(confirm(`庫存不足！目前可申請 ${avail} 個，是否加入現有量？`)){
+          if(qtyInput) qtyInput.value = avail;
+          btn.disabled = false;
+          addToCart(itemId, avail, btn);
+          return;
+        }
+      } else {
+        alert('此品項目前無庫存可申請');
+      }
+      btn.textContent='＋ 加入申請'; btn.style.background='#fe7b81'; btn.disabled=false;
+    }
+  } catch(e) {
+    btn.textContent='＋ 加入申請'; btn.style.background='#fe7b81'; btn.disabled=false;
+  }
 }
 </script>
 {% endblock %}

@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}美善基金會庫存系統{% endblock %}
+{% block content %}
+<style>
+.confirm-wrap{max-width:600px;margin:0 auto;padding:24px 20px}
+.confirm-box{background:#fff;border-radius:14px;padding:32px;border:2px solid #8ecaaa;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+.order-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.order-table th{background:#fdf6f0;padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#a8958c;border-bottom:1px solid #edddd0}
+.order-table td{padding:8px 12px;border-bottom:1px solid #f0e0e0}
+.order-table tr:last-child td{border-bottom:none}
+.screenshot-notice{background:#fff8e8;border:1px solid #f0b87a;border-radius:8px;padding:14px 16px;margin:20px 0;font-size:13px;color:#6b5a52}
+</style>
+
+<div class="confirm-wrap">
+  <div class="confirm-box">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:48px">✅</div>
+      <h2 style="font-size:20px;font-weight:700;color:#4a9e6b;margin:8px 0">申請已送出！</h2>
+      <div style="color:#a8958c;font-size:13px">申請單號：<strong style="color:#333">{{ order.order_no }}</strong></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px">
+      <div><span style="color:#a8958c">申請人：</span><strong>{{ order.applicant }}</strong></div>
+      <div><span style="color:#a8958c">申請時間：</span>{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+    </div>
+    {% if order.note %}
+    <div style="font-size:13px;margin-bottom:16px"><span style="color:#a8958c">備註：</span>{{ order.note }}</div>
+    {% endif %}
+
+    <table class="order-table">
+      <thead>
+        <tr><th>品項</th><th>品牌</th><th>規格</th><th>到期日</th><th style="text-align:center">申請數量</th></tr>
+      </thead>
+      <tbody>
+      {% for oi in order.items %}
+      <tr>
+        <td><strong>{{ oi.item_name }}</strong></td>
+        <td style="color:#6b5a52">{{ oi.brand_name }}</td>
+        <td>{{ oi.spec_name }}</td>
+        <td style="font-size:12px;color:#a8958c">{{ oi.expiry_str }}</td>
+        <td style="text-align:center;font-weight:700">{{ oi.qty_request }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="screenshot-notice">
+      📸 <strong>請截圖此頁面保存</strong>，作為您的申請憑證。<br>
+      管理員收到通知後將進行審核，物資準備好後會通知您領取。
+    </div>
+
+    <div style="text-align:center;margin-top:20px">
+      <a href="{{ url_for('index') }}" style="padding:10px 24px;background:#fe7b81;color:white;border-radius:8px;text-decoration:none;font-weight:600">回到庫存總覽</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

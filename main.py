@@ -38,12 +38,14 @@ def unauthorized():
 # ── Models ────────────────────────────────────────────────
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
-    id         = db.Column(db.Integer, primary_key=True)
-    username   = db.Column(db.String(80), unique=True, nullable=False)
-    email      = db.Column(db.String(120), unique=True, nullable=False)
-    password   = db.Column(db.String(256), nullable=False)
-    role       = db.Column(db.String(20), default='viewer')
-    created_at = db.Column(db.DateTime, default=now_tw)
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(80), unique=True, nullable=False)
+    email         = db.Column(db.String(120), unique=True, nullable=False)
+    password      = db.Column(db.String(256), nullable=False)
+    role          = db.Column(db.String(20), default='viewer')
+    notify_email  = db.Column(db.String(120), nullable=True)   # 通知信箱
+    notify_on     = db.Column(db.Boolean, default=False)       # 是否接收通知
+    created_at    = db.Column(db.DateTime, default=now_tw)
 
     def is_admin(self):  return self.role == 'admin'
     def can_edit(self):  return self.role in ('admin', 'editor')
@@ -135,9 +137,23 @@ class Batch(db.Model):
     spec_id     = db.Column(db.Integer, db.ForeignKey('specs.id'), nullable=False)
     qty         = db.Column(db.Integer, default=0)
     expiry_date = db.Column(db.Date, nullable=True)
-    cost_price  = db.Column(db.Numeric(10, 2), nullable=True)   # 進價
-    note        = db.Column(db.String(200), nullable=True)       # 備註
+    cost_price  = db.Column(db.Numeric(10, 2), nullable=True)
+    note        = db.Column(db.String(200), nullable=True)
     created_at  = db.Column(db.DateTime, default=now_tw)
+
+    @property
+    def reserved_qty(self):
+        """圈存數量：pending 申請單中已預留的數量"""
+        return db.session.query(
+            db.func.coalesce(db.func.sum(OrderItem.qty_request), 0)
+        ).join(Order).filter(
+            OrderItem.batch_id == self.id,
+            Order.status == 'pending'
+        ).scalar()
+
+    @property
+    def available_qty(self):
+        return max(0, self.qty - self.reserved_qty)
 
 
 class StockLog(db.Model):
@@ -150,6 +166,48 @@ class StockLog(db.Model):
     created_at = db.Column(db.DateTime, default=now_tw)
     user       = db.relationship('User', backref='logs')
     batch      = db.relationship('Batch', backref='logs')
+
+
+class Order(db.Model):
+    __tablename__ = 'orders'
+    id           = db.Column(db.Integer, primary_key=True)
+    order_no     = db.Column(db.String(20), unique=True, nullable=False)
+    applicant    = db.Column(db.String(80), nullable=False)   # 申請人姓名
+    status       = db.Column(db.String(20), default='pending')
+    # pending=待處理 / confirmed=已出貨 / cancelled=已取消
+    note         = db.Column(db.String(300), nullable=True)
+    created_at   = db.Column(db.DateTime, default=now_tw)
+    confirmed_at = db.Column(db.DateTime, nullable=True)
+    confirmed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    items        = db.relationship('OrderItem', backref='order', lazy=True,
+                                   cascade='all, delete-orphan')
+    confirmer    = db.relationship('User', foreign_keys=[confirmed_by])
+
+
+class OrderItem(db.Model):
+    __tablename__ = 'order_items'
+    id          = db.Column(db.Integer, primary_key=True)
+    order_id    = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
+    batch_id    = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=False)
+    qty_request = db.Column(db.Integer, nullable=False)   # 申請數量
+    qty_actual  = db.Column(db.Integer, nullable=True)    # 實際出貨數量（後台可調整）
+    batch       = db.relationship('Batch', backref='order_items')
+
+    @property
+    def item_name(self):
+        return self.batch.spec.brand.item.name if self.batch else '—'
+
+    @property
+    def brand_name(self):
+        return self.batch.spec.brand.name if self.batch else '—'
+
+    @property
+    def spec_name(self):
+        return self.batch.spec.name if self.batch else '—'
+
+    @property
+    def expiry_str(self):
+        return self.batch.expiry_date.isoformat() if self.batch and self.batch.expiry_date else '—'
 
 
 # ── Helpers ───────────────────────────────────────────────
@@ -624,6 +682,285 @@ def sort_categories():
     db.session.commit(); return jsonify({'ok': True})
 
 
+# ── Cart / Order (public) ─────────────────────────────────
+@app.route('/cart')
+def cart():
+    cart = session.get('cart', [])
+    today = now_tw().date()
+    today_30 = today + timedelta(days=30)
+    items_detail = []
+    for entry in cart:
+        batch = Batch.query.get(entry['batch_id'])
+        if batch:
+            items_detail.append({
+                'batch_id':   batch.id,
+                'item_name':  batch.spec.brand.item.name,
+                'brand_name': batch.spec.brand.name,
+                'spec_name':  batch.spec.name,
+                'unit':       batch.spec.brand.item.unit,
+                'expiry':     batch.expiry_date.isoformat() if batch.expiry_date else '—',
+                'available':  batch.available_qty,
+                'qty':        entry['qty'],
+            })
+    return render_template('cart.html', cart=items_detail, today=today, today_30=today_30)
+
+
+@app.route('/cart/add', methods=['POST'])
+def cart_add():
+    data     = request.get_json()
+    item_id  = data.get('item_id')
+    qty      = int(data.get('qty', 1))
+    today    = now_tw().date()
+
+    item = Item.query.get(item_id)
+    if not item:
+        return jsonify({'ok': False, 'msg': '品項不存在'})
+
+    # 收集所有批次，依到期日排序（最近到期優先，無到期日排最後）
+    all_batches = []
+    for brand in item.brands:
+        for spec in brand.specs:
+            for batch in spec.batches:
+                if batch.available_qty > 0:
+                    all_batches.append(batch)
+    all_batches.sort(key=lambda b: (
+        b.expiry_date is None,
+        b.expiry_date or date_type(9999,12,31)
+    ))
+
+    if not all_batches:
+        total_qty = item.total_qty
+        return jsonify({'ok': False, 'insufficient': True,
+                        'available': total_qty, 'msg': f'目前庫存為 {total_qty}'})
+
+    total_available = sum(b.available_qty for b in all_batches)
+    if qty > total_available:
+        return jsonify({'ok': False, 'insufficient': True,
+                        'available': total_available,
+                        'msg': f'庫存不足，目前可申請 {total_available} 個'})
+
+    # 分配到批次（FEFO: First Expire First Out）
+    cart = session.get('cart', [])
+    remaining = qty
+    added = []
+    for batch in all_batches:
+        if remaining <= 0: break
+        take = min(remaining, batch.available_qty)
+        # 檢查購物車是否已有此批次
+        found = False
+        for entry in cart:
+            if entry['batch_id'] == batch.id:
+                entry['qty'] += take
+                found = True
+                break
+        if not found:
+            cart.append({'batch_id': batch.id, 'qty': take})
+        remaining -= take
+        added.append({'batch_id': batch.id, 'qty': take})
+
+    session['cart'] = cart
+    session.modified = True
+    return jsonify({'ok': True, 'added': added,
+                    'cart_count': sum(e['qty'] for e in cart)})
+
+
+@app.route('/cart/update', methods=['POST'])
+def cart_update():
+    data     = request.get_json()
+    batch_id = data.get('batch_id')
+    qty      = int(data.get('qty', 0))
+    cart     = session.get('cart', [])
+    if qty <= 0:
+        cart = [e for e in cart if e['batch_id'] != batch_id]
+    else:
+        for entry in cart:
+            if entry['batch_id'] == batch_id:
+                entry['qty'] = qty
+    session['cart'] = cart
+    session.modified = True
+    return jsonify({'ok': True})
+
+
+@app.route('/cart/clear', methods=['POST'])
+def cart_clear():
+    session['cart'] = []
+    session.modified = True
+    return jsonify({'ok': True})
+
+
+@app.route('/order/submit', methods=['POST'])
+def order_submit():
+    applicant = request.form.get('applicant', '').strip()
+    note      = request.form.get('note', '').strip()
+    cart      = session.get('cart', [])
+
+    if not applicant:
+        flash('請填寫申請人姓名', 'danger')
+        return redirect(url_for('cart'))
+    if not cart:
+        flash('購物車是空的', 'danger')
+        return redirect(url_for('cart'))
+
+    # 產生申請單號
+    ts       = now_tw().strftime('%Y%m%d%H%M%S')
+    order_no = f'ORD-{ts}'
+
+    order = Order(order_no=order_no, applicant=applicant, note=note)
+    db.session.add(order); db.session.flush()
+
+    for entry in cart:
+        batch = Batch.query.get(entry['batch_id'])
+        if not batch: continue
+        oi = OrderItem(order_id=order.id, batch_id=batch.id,
+                       qty_request=entry['qty'], qty_actual=entry['qty'])
+        db.session.add(oi)
+
+    db.session.commit()
+    session['cart'] = []
+    session.modified = True
+
+    # 寄信通知
+    try:
+        from notify import send_order_notify
+        send_order_notify(order)
+    except Exception: pass
+
+    return redirect(url_for('order_confirm', order_no=order_no))
+
+
+@app.route('/order/confirm/<order_no>')
+def order_confirm(order_no):
+    order = Order.query.filter_by(order_no=order_no).first_or_404()
+    return render_template('order_confirm.html', order=order)
+
+
+# ── Admin: Orders ──────────────────────────────────────────
+@app.route('/admin/orders')
+@login_required
+@editor_required
+def admin_orders():
+    status  = request.args.get('status', 'pending')
+    orders  = Order.query.filter_by(status=status)\
+                         .order_by(Order.created_at.desc()).all()
+    pending_count = Order.query.filter_by(status='pending').count()
+    return render_template('admin/orders.html', orders=orders,
+                           status=status, pending_count=pending_count)
+
+
+@app.route('/admin/orders/<int:oid>')
+@login_required
+@editor_required
+def admin_order_detail(oid):
+    order  = Order.query.get_or_404(oid)
+    today  = now_tw().date()
+    # 取得每個品項可選的批次清單
+    for oi in order.items:
+        item = oi.batch.spec.brand.item
+        # 找同品項下所有批次（依到期日排序）
+        batches = []
+        for brand in item.brands:
+            for spec in brand.specs:
+                for b in spec.batches:
+                    if b.qty > 0:
+                        batches.append(b)
+        batches.sort(key=lambda b: (
+            b.expiry_date is None,
+            b.expiry_date or date_type(9999,12,31)
+        ))
+        oi._available_batches = batches
+    return render_template('admin/order_detail.html', order=order, today=today)
+
+
+@app.route('/admin/orders/<int:oid>/update', methods=['POST'])
+@login_required
+@editor_required
+def admin_order_update(oid):
+    order = Order.query.get_or_404(oid)
+    if order.status != 'pending':
+        flash('此申請單已處理', 'danger')
+        return redirect(url_for('admin_orders'))
+    for oi in order.items:
+        qty_key   = f'qty_{oi.id}'
+        batch_key = f'batch_{oi.id}'
+        if qty_key in request.form:
+            oi.qty_actual = int(request.form[qty_key] or 0)
+        if batch_key in request.form:
+            oi.batch_id = int(request.form[batch_key])
+    db.session.commit()
+    flash('申請單已更新', 'success')
+    return redirect(url_for('admin_order_detail', oid=oid))
+
+
+@app.route('/admin/orders/<int:oid>/confirm', methods=['POST'])
+@login_required
+@editor_required
+def admin_order_confirm(oid):
+    order = Order.query.get_or_404(oid)
+    if order.status != 'pending':
+        flash('此申請單已處理', 'danger')
+        return redirect(url_for('admin_orders'))
+
+    for oi in order.items:
+        qty = oi.qty_actual or 0
+        if qty <= 0: continue
+        batch = Batch.query.get(oi.batch_id)
+        if not batch: continue
+        if qty > batch.qty:
+            flash(f'{oi.item_name} 庫存不足（現有 {batch.qty}，申請 {qty}）', 'danger')
+            return redirect(url_for('admin_order_detail', oid=oid))
+        batch.qty -= qty
+        log = StockLog(batch_id=batch.id, change=-qty,
+                       reason=f'申請單 {order.order_no} / {order.applicant}',
+                       user_id=current_user.id)
+        db.session.add(log)
+        try:
+            from gsheet import append_log_row
+            append_log_row(batch, -qty,
+                           f'申請單 {order.order_no}', current_user.username)
+        except Exception: pass
+
+    order.status       = 'confirmed'
+    order.confirmed_at = now_tw()
+    order.confirmed_by = current_user.id
+    db.session.commit()
+    flash(f'申請單 {order.order_no} 已確認出貨，庫存已扣除', 'success')
+    return redirect(url_for('admin_orders'))
+
+
+@app.route('/admin/orders/<int:oid>/cancel', methods=['POST'])
+@login_required
+@editor_required
+def admin_order_cancel(oid):
+    order = Order.query.get_or_404(oid)
+    order.status = 'cancelled'
+    db.session.commit()
+    flash('申請單已取消', 'success')
+    return redirect(url_for('admin_orders'))
+
+
+# ── Admin: User notify settings ───────────────────────────
+@app.route('/admin/users/<int:uid>/notify', methods=['POST'])
+@login_required
+@admin_required
+def admin_user_notify(uid):
+    u = User.query.get_or_404(uid)
+    old_email  = u.notify_email
+    u.notify_on    = 'notify_on' in request.form
+    u.notify_email = request.form.get('notify_email', '').strip() or None
+    db.session.commit()
+    # 寄測試信（信箱有變更時）
+    if u.notify_email and u.notify_email != old_email:
+        try:
+            from notify import send_test_email
+            send_test_email(u.notify_email, u.username)
+            flash(f'設定已儲存，測試信已寄送至 {u.notify_email}', 'success')
+        except Exception as e:
+            flash(f'設定已儲存，但測試信寄送失敗：{e}', 'danger')
+    else:
+        flash('通知設定已儲存', 'success')
+    return redirect(url_for('admin_users'))
+
+
 # ── Google Sheet ──────────────────────────────────────────
 @app.route('/admin/gsheet/sync', methods=['POST'])
 @login_required
@@ -687,6 +1024,8 @@ with app.app_context():
             for sql in [
                 "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
                 "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+                "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_email VARCHAR(120)",
+                "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_on BOOLEAN DEFAULT FALSE",
             ]:
                 try: conn.execute(text(sql)); conn.commit()
                 except Exception: conn.rollback()

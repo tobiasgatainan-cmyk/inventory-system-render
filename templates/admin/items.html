@@ -132,9 +132,11 @@
     <div class="form-row-2">
       <div class="fc"><label class="fl">進價 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
         <input type="text" class="fi" name="cost_price" placeholder="進價（如 150）"></div>
-      <div class="fc"><label class="fl">備註 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
-        <input type="text" class="fi" name="note" placeholder="備註"></div>
+      <div class="fc"><label class="fl">供應商 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
+        <input type="text" class="fi" name="supplier" placeholder="供應商"></div>
     </div>
+    <div class="fc"><label class="fl">備註 <span style="font-weight:400;color:var(--text3)">（選填）</span></label>
+      <input type="text" class="fi" name="note" placeholder="備註"></div>
     <button type="submit" class="submit-btn in-submit" id="submitBtn">⬇️ 確認入庫</button>
   </form>
 
@@ -235,9 +237,7 @@
           <td style="font-size:12px;color:{% if exp_status=='out' %}var(--out){% elif exp_status=='low' %}var(--low){% else %}var(--text3){% endif %}">
             {{ batch.expiry_date.strftime('%Y-%m-%d') if batch.expiry_date else '—' }}
           </td>
-          {% if loop.first %}
-          <td rowspan="{{ item_rows|length }}" style="font-size:12px;color:var(--text3)">{{ item.supplier or '—' }}</td>
-          {% endif %}
+          <td style="font-size:12px;color:var(--text3)">{{ batch.supplier or '—' }}</td>
           <td style="font-size:12px;color:var(--text3)">{{ batch.cost_price if batch.cost_price else '—' }}</td>
           <td style="font-size:12px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ batch.note or '—' }}</td>
           {% if loop.first %}

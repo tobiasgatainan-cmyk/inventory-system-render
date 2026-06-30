@@ -207,7 +207,7 @@
     <div style="overflow-x:auto">
     <table class="data-table" id="itemTable">
       <thead>
-        <tr><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>數量</th><th>到期日</th><th>進價</th><th>備註</th><th style="text-align:right">操作</th></tr>
+        <tr><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>數量</th><th>到期日</th><th>供應商</th><th>進價</th><th>備註</th><th style="text-align:right">操作</th></tr>
       </thead>
       <tbody>
       {% for item in items %}
@@ -235,6 +235,9 @@
           <td style="font-size:12px;color:{% if exp_status=='out' %}var(--out){% elif exp_status=='low' %}var(--low){% else %}var(--text3){% endif %}">
             {{ batch.expiry_date.strftime('%Y-%m-%d') if batch.expiry_date else '—' }}
           </td>
+          {% if loop.first %}
+          <td rowspan="{{ item_rows|length }}" style="font-size:12px;color:var(--text3)">{{ item.supplier or '—' }}</td>
+          {% endif %}
           <td style="font-size:12px;color:var(--text3)">{{ batch.cost_price if batch.cost_price else '—' }}</td>
           <td style="font-size:12px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ batch.note or '—' }}</td>
           {% if loop.first %}
@@ -254,7 +257,7 @@
         <tr data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}">
           <td><span class="cat-pill">{{ item.category.name if item.category else '—' }}</span></td>
           <td style="font-weight:600">{{ item.name }}</td>
-          <td colspan="6" style="color:var(--text3);font-size:12px">尚無品牌／規格資料</td>
+          <td colspan="7" style="color:var(--text3);font-size:12px">尚無品牌／規格資料</td>
           <td>
             <div class="td-actions">
               <a href="{{ url_for('admin_edit_item', iid=item.id) }}" class="icon-btn">✏️ 編輯</a>

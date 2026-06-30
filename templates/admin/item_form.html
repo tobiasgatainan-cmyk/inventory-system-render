@@ -13,8 +13,19 @@
 <form method="POST" id="itemForm">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     <div class="form-group" style="grid-column:1/-1">
+      <label>分類</label>
+      <select name="category_id">
+        <option value="">— 未分類 —</option>
+        {% for c in cats %}
+        <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="grid-column:1/-1">
       <label>品項名稱</label>
-      <input type="text" name="name" value="{{ item.name if item else '' }}" required>
+      <input type="text" name="name" value="{{ item.name if item else '' }}" required
+             {% if not item %}id="itemNameInput" oninput="checkDuplicateName(this.value)"{% endif %}>
+      {% if not item %}<div id="dupWarning" style="display:none;font-size:12px;color:#d97b2a;margin-top:4px">⚠ 已有同名品項，新增的品牌將加入該品項底下</div>{% endif %}
     </div>
     <div class="form-group">
       <label>單位（包、個、盒…）</label>
@@ -23,15 +34,6 @@
     <div class="form-group">
       <label>供應商</label>
       <input type="text" name="supplier" value="{{ item.supplier if item else '' }}">
-    </div>
-    <div class="form-group" style="grid-column:1/-1">
-      <label>分類</label>
-      <select name="category_id">
-        <option value="">— 未分類 —</option>
-        {% for c in cats %}
-        <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
-        {% endfor %}
-      </select>
     </div>
   </div>
 
@@ -165,6 +167,14 @@
 <script>
 const isEdit = {{ 'true' if item else 'false' }};
 let brandCount = {{ item.brands|length if item and item.brands else 1 }};
+const existingItemNames = {{ all_item_names|tojson if all_item_names is defined else '[]' }};
+
+function checkDuplicateName(val){
+  const warn = document.getElementById('dupWarning');
+  if(!warn) return;
+  const match = existingItemNames.some(n => n === val.trim());
+  warn.style.display = match ? 'block' : 'none';
+}
 
 function addBrand() {
   const idx = brandCount++;

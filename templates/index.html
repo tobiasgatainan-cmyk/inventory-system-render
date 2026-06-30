@@ -231,7 +231,10 @@ function filterItems(){
     countEl.textContent=cat===''?visible:(catCounts[cat]||0);
   });
   document.getElementById('section-label').textContent=`品項列表（${visible} 項）`;
-}<!-- 規格選擇 Modal -->
+}
+</script>
+
+<!-- 規格選擇 Modal -->
 <div id="specModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;align-items:center;justify-content:center">
   <div style="background:white;border-radius:14px;padding:24px;width:420px;max-width:95vw;max-height:80vh;overflow-y:auto">
     <h3 id="specModalTitle" style="font-size:16px;font-weight:700;margin-bottom:4px;color:#2a1f1a"></h3>
@@ -347,5 +350,6 @@ async function updateCartCount(){
 
 // 初始化購物車數量
 updateCartCount();
+</script>
 
 {% endblock %}

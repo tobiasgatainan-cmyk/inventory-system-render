@@ -56,7 +56,7 @@ def full_sync():
                         batch.expiry_date.isoformat() if batch.expiry_date else '',
                         float(batch.cost_price) if batch.cost_price else '',
                         brand.safe_qty,
-                        item.supplier or '',
+                        batch.supplier or '',
                         item.category.name if item.category else '',
                         last_sync,
                     ])
@@ -104,7 +104,7 @@ def append_purchase_record(batch, username):
     ws  = _sheet('進貨記錄')
     now = now_tw().strftime('%Y-%m-%d %H:%M')
 
-    HEADERS = ['時間','品項','品牌','規格','入庫數量','到期日','進價','備註','操作人']
+    HEADERS = ['時間','品項','品牌','規格','入庫數量','到期日','進價','供應商','備註','操作人']
 
     try:
         first_row = ws.row_values(1)
@@ -126,6 +126,7 @@ def append_purchase_record(batch, username):
         batch.qty,
         batch.expiry_date.isoformat() if batch.expiry_date else '',
         float(batch.cost_price) if batch.cost_price else '',
+        batch.supplier or '',
         batch.note or '',
         username,
     ])

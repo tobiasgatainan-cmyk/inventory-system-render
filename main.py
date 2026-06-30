@@ -138,6 +138,7 @@ class Batch(db.Model):
     qty         = db.Column(db.Integer, default=0)
     expiry_date = db.Column(db.Date, nullable=True)
     cost_price  = db.Column(db.Numeric(10, 2), nullable=True)
+    supplier    = db.Column(db.String(100), nullable=True)
     note        = db.Column(db.String(200), nullable=True)
     created_at  = db.Column(db.DateTime, default=now_tw)
 
@@ -410,15 +411,13 @@ def admin_add_item():
         existing_item = Item.query.filter_by(name=name).first()
         if existing_item:
             item = existing_item
-            # 同名品項以新表單的單位/供應商/分類覆蓋更新（可選）
-            if request.form.get('unit'):     item.unit     = request.form['unit']
-            if request.form.get('supplier'): item.supplier = request.form['supplier']
+            if request.form.get('unit'):
+                item.unit = request.form['unit']
             if request.form.get('category_id'):
                 item.category_id = int(request.form['category_id'])
             flash_msg = f'「{name}」已存在，新增的品牌已加入該品項'
         else:
             item = Item(name=name, unit=request.form['unit'],
-                        supplier=request.form['supplier'],
                         category_id=int(request.form['category_id']) if request.form['category_id'] else None)
             db.session.add(item); db.session.flush()
             flash_msg = '品項新增成功'
@@ -437,7 +436,6 @@ def admin_edit_item(iid):
     if request.method == 'POST':
         item.name        = request.form['name']
         item.unit        = request.form['unit']
-        item.supplier    = request.form['supplier']
         item.category_id = int(request.form['category_id']) if request.form['category_id'] else None
 
         # 收集現有批次，以 (品牌名, 規格名) 為 key
@@ -483,6 +481,7 @@ def admin_edit_item(iid):
                         qty         = batch.qty,
                         expiry_date = batch.expiry_date,
                         cost_price  = batch.cost_price,
+                        supplier    = batch.supplier,
                         note        = batch.note,
                         created_at  = batch.created_at,
                     )
@@ -497,14 +496,15 @@ def admin_edit_item(iid):
     return render_template('admin/item_form.html', item=item, cats=cats)
 
 def _save_brands(item_id, form, is_edit=False):
-    brand_names   = form.getlist('brand_name[]')
-    brand_safes   = form.getlist('brand_safe[]')
-    spec_names    = form.getlist('spec_name[]')
-    spec_qtys     = form.getlist('spec_qty[]')
-    spec_expiries = form.getlist('spec_expiry[]')
-    spec_costs    = form.getlist('spec_cost[]')
-    spec_notes    = form.getlist('spec_note[]')
-    brand_indices = form.getlist('spec_brand_index[]')
+    brand_names    = form.getlist('brand_name[]')
+    brand_safes    = form.getlist('brand_safe[]')
+    spec_names     = form.getlist('spec_name[]')
+    spec_qtys      = form.getlist('spec_qty[]')
+    spec_expiries  = form.getlist('spec_expiry[]')
+    spec_costs     = form.getlist('spec_cost[]')
+    spec_suppliers = form.getlist('spec_supplier[]')
+    spec_notes     = form.getlist('spec_note[]')
+    brand_indices  = form.getlist('spec_brand_index[]')
 
     brands_created = []
     for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
@@ -514,8 +514,8 @@ def _save_brands(item_id, form, is_edit=False):
         db.session.add(brand); db.session.flush()
         brands_created.append(brand)
 
-    for si, (sname, sqty, sexp, scost, snote, bidx) in enumerate(
-            zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_notes, brand_indices)):
+    for si, (sname, sqty, sexp, scost, ssup, snote, bidx) in enumerate(
+            zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_suppliers, spec_notes, brand_indices)):
         if not sname.strip(): continue
         try: bidx = int(bidx)
         except (ValueError, TypeError): bidx = 0
@@ -535,11 +535,11 @@ def _save_brands(item_id, form, is_edit=False):
                 try: cost = float(scost.strip())
                 except ValueError: pass
             qty = int(sqty or 0)
-            if qty > 0 or True:  # always create initial batch
-                batch = Batch(spec_id=spec.id, qty=qty,
-                              expiry_date=exp, cost_price=cost,
-                              note=snote.strip() or None)
-                db.session.add(batch)
+            batch = Batch(spec_id=spec.id, qty=qty,
+                          expiry_date=exp, cost_price=cost,
+                          supplier=ssup.strip() or None,
+                          note=snote.strip() or None)
+            db.session.add(batch)
 
 @app.route('/admin/items/<int:iid>/delete', methods=['POST'])
 @login_required
@@ -560,6 +560,7 @@ def stock_in():
     reason   = request.form.get('reason', '')
     exp_str  = request.form.get('expiry_date', '').strip()
     cost_str = request.form.get('cost_price', '').strip()
+    supplier = request.form.get('supplier', '').strip()
     note     = request.form.get('note', '').strip()
 
     spec = Spec.query.get_or_404(spec_id)
@@ -573,23 +574,25 @@ def stock_in():
         try: cost = float(cost_str)
         except ValueError: pass
 
-    # 四個欄位全部相同才合併：到期日、進價、備註、規格名稱
+    # 五個欄位全部相同才合併：到期日、進價、供應商、備註
     existing = None
     for b in spec.batches:
         same_exp  = b.expiry_date == exp
         same_cost = str(b.cost_price or '') == str(cost or '')
+        same_sup  = (b.supplier or '') == (supplier or '')
         same_note = (b.note or '') == (note or '')
-        if same_exp and same_cost and same_note:
+        if same_exp and same_cost and same_sup and same_note:
             existing = b; break
 
     if existing:
         existing.qty += qty
         if cost: existing.cost_price = cost
+        if supplier: existing.supplier = supplier
         if note: existing.note = note
         batch = existing
     else:
         batch = Batch(spec_id=spec_id, qty=qty, expiry_date=exp,
-                      cost_price=cost, note=note or None)
+                      cost_price=cost, supplier=supplier or None, note=note or None)
         db.session.add(batch); db.session.flush()
 
     log = StockLog(batch_id=batch.id, change=qty, reason=reason, user_id=current_user.id)
@@ -1053,6 +1056,7 @@ with app.app_context():
                 "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_email VARCHAR(120)",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_on BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
             ]:
                 try: conn.execute(text(sql)); conn.commit()
                 except Exception: conn.rollback()

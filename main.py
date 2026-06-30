@@ -405,14 +405,28 @@ def admin_items():
 def admin_add_item():
     cats = Category.query.order_by(Category.sort_order, Category.name).all()
     if request.method == 'POST':
-        item = Item(name=request.form['name'], unit=request.form['unit'],
-                    supplier=request.form['supplier'],
-                    category_id=int(request.form['category_id']) if request.form['category_id'] else None)
-        db.session.add(item); db.session.flush()
+        name = request.form['name'].strip()
+        # 檢查是否已有同名品項，若有則沿用（避免重複建立）
+        existing_item = Item.query.filter_by(name=name).first()
+        if existing_item:
+            item = existing_item
+            # 同名品項以新表單的單位/供應商/分類覆蓋更新（可選）
+            if request.form.get('unit'):     item.unit     = request.form['unit']
+            if request.form.get('supplier'): item.supplier = request.form['supplier']
+            if request.form.get('category_id'):
+                item.category_id = int(request.form['category_id'])
+            flash_msg = f'「{name}」已存在，新增的品牌已加入該品項'
+        else:
+            item = Item(name=name, unit=request.form['unit'],
+                        supplier=request.form['supplier'],
+                        category_id=int(request.form['category_id']) if request.form['category_id'] else None)
+            db.session.add(item); db.session.flush()
+            flash_msg = '品項新增成功'
         _save_brands(item.id, request.form, is_edit=False)
-        db.session.commit(); flash('品項新增成功', 'success')
+        db.session.commit(); flash(flash_msg, 'success')
         return redirect(url_for('admin_items'))
-    return render_template('admin/item_form.html', item=None, cats=cats)
+    return render_template('admin/item_form.html', item=None, cats=cats,
+                           all_item_names=[i.name for i in Item.query.all()])
 
 @app.route('/admin/items/<int:iid>/edit', methods=['GET', 'POST'])
 @login_required

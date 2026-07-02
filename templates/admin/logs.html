@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}異動紀錄</div>
-{% endblock %}
+{% block title %}美善基金會庫存系統{% endblock %}
 {% block content %}
 <div class="container">
 
@@ -9,22 +8,31 @@
 <div class="card" style="padding:0;overflow:hidden">
 <table>
   <thead>
-    <tr><th>時間</th><th>品項</th><th>規格</th><th>異動</th><th>理由</th><th>操作人</th></tr>
+    <tr><th>時間</th><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>異動</th><th>理由</th><th>操作人</th></tr>
   </thead>
   <tbody>
   {% for log in logs %}
-  <tr>
+  {% set spec  = log.batch.spec if log.batch else none %}
+  {% set brand = spec.brand if spec else none %}
+  {% set item  = brand.item if brand else none %}
+  <tr style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(254,123,129,.06){% endif %}">
     <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
-    <td>{{ log.spec.item.name if log.spec else '—' }}</td>
-    <td style="font-size:12px">{{ log.spec.name if log.spec else '—' }}</td>
-    <td style="font-weight:700;color:{% if log.change > 0 %}#28a745{% else %}#dc3545{% endif %}">
-      {{ '+' if log.change > 0 else '' }}{{ log.change }}
+    <td style="font-size:12px">{{ item.category.name if item and item.category else '—' }}</td>
+    <td style="font-weight:600">{{ item.name if item else '—' }}</td>
+    <td style="font-size:12px;color:#6b5a52">{{ brand.name if brand else '—' }}</td>
+    <td style="font-size:12px">{{ spec.name if spec else '—' }}</td>
+    <td>
+      <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;
+        background:{% if log.change > 0 %}#edf7f1{% else %}#fff0f1{% endif %};
+        color:{% if log.change > 0 %}#4a9e6b{% else %}#fe7b81{% endif %}">
+        {{ '+' if log.change > 0 else '' }}{{ log.change }}
+      </span>
     </td>
     <td style="font-size:12px;color:#666">{{ log.reason or '—' }}</td>
     <td style="font-size:12px">{{ log.user.username if log.user else '—' }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
+  <tr><td colspan="8" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
   {% endfor %}
   </tbody>
 </table>

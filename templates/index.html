@@ -329,7 +329,7 @@ async function confirmSpecAdd(){
 }
 
 async function addToCartBySpec(itemId, brand, spec, qty, btn){
-  const r = await fetch('/cart/add', {
+  const r = await fetch('/basket/append', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({item_id: itemId, brand: brand, spec: spec, qty: qty})
   });
@@ -338,7 +338,7 @@ async function addToCartBySpec(itemId, brand, spec, qty, btn){
     const avail = data.available;
     if(avail > 0){
       if(confirm(`庫存不足！目前可申請 ${avail} 個，是否加入現有量？`)){
-        await fetch('/cart/add', {
+        await fetch('/basket/append', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({item_id: itemId, brand: brand, spec: spec, qty: avail})
         });

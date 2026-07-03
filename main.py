@@ -21,8 +21,22 @@ if DATABASE_URL.startswith('postgres://'):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Render 免費版 PostgreSQL 同時連線數很少，這裡限制連線池大小並在
+# 連線失效時自動回收，避免多分頁/多請求同時發生時把連線佔滿導致
+# /api/... 這類次要查詢逾時或失敗。
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 3,
+    'max_overflow': 2,
+    'pool_recycle': 280,
+    'pool_pre_ping': True,
+    'pool_timeout': 10,
+}
 
 db = SQLAlchemy(app)
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db.session.remove()
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '請先登入'
@@ -313,25 +327,30 @@ def index():
 # ── API: item detail for card expand ─────────────────────
 @app.route('/api/item/<int:iid>')
 def api_item_detail(iid):
-    item  = Item.query.get_or_404(iid)
-    today = now_tw().date()
-    result = []
-    for brand in item.brands:
-        for spec in brand.specs:
-            for batch in spec.batches:
-                exp = batch.expiry_date.isoformat() if batch.expiry_date else None
-                days_left = (batch.expiry_date - today).days if batch.expiry_date else None
-                result.append({
-                    'batch_id':    batch.id,
-                    'brand':       brand.name,
-                    'spec':        spec.name,
-                    'qty':         batch.qty,
-                    'expiry_date': exp,
-                    'days_left':   days_left,
-                    'note':        batch.note or '',
-                    'unit':        item.unit,
-                })
-    return jsonify({'item': item.name, 'unit': item.unit, 'batches': result})
+    try:
+        item  = Item.query.get_or_404(iid)
+        today = now_tw().date()
+        result = []
+        for brand in item.brands:
+            for spec in brand.specs:
+                for batch in spec.batches:
+                    exp = batch.expiry_date.isoformat() if batch.expiry_date else None
+                    days_left = (batch.expiry_date - today).days if batch.expiry_date else None
+                    result.append({
+                        'batch_id':    batch.id,
+                        'brand':       brand.name,
+                        'spec':        spec.name,
+                        'qty':         batch.qty,
+                        'expiry_date': exp,
+                        'days_left':   days_left,
+                        'note':        batch.note or '',
+                        'unit':        item.unit,
+                    })
+        return jsonify({'item': item.name, 'unit': item.unit, 'batches': result})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.exception(f'api_item_detail failed for iid={iid}')
+        return jsonify({'error': str(e)}), 500
 
 
 # ── Admin: Users ──────────────────────────────────────────

@@ -278,13 +278,6 @@ async function openSpecModal(itemId, btn){
 
     if(specData.length === 0){
       list.innerHTML = '<p style="color:#a8958c;text-align:center;padding:16px">目前無可用庫存</p>';
-    } else if(specData.length === 1){
-      // 只有一種規格，直接加入（先存起來，因為 closeSpecModal() 會清空 specData）
-      const only = specData[0];
-      closeSpecModal();
-      btn.disabled = false; btn.textContent = '＋ 加入購物車';
-      await addToCartBySpec(itemId, only.brand, only.spec, 1, btn);
-      return;
     } else {
       list.innerHTML = specData.map((s, i) => `
         <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #edddd0;border-radius:8px;margin-bottom:8px">

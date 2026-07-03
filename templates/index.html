@@ -195,6 +195,10 @@ function toggleExpand(card){
       });
       expandCache[id]=html;
       panel.innerHTML=html;
+    })
+    .catch(err=>{
+      panel.innerHTML='<div style="color:var(--out);font-size:12px;padding:8px 0">載入失敗，請點擊卡片重試</div>';
+      console.error('載入品項明細失敗', err);
     });
 }
 
@@ -255,6 +259,9 @@ async function openSpecModal(itemId, btn){
   btn.disabled = true; btn.textContent = '載入中…';
   try {
     const r = await fetch('/api/item/'+itemId);
+    if(!r.ok){
+      throw new Error('HTTP '+r.status);
+    }
     const data = await r.json();
     // 整理規格清單（依品牌+規格名稱分組，合計 qty > 0 才顯示）
     const specMap = {};
@@ -292,7 +299,8 @@ async function openSpecModal(itemId, btn){
 
     document.getElementById('specModal').style.display = 'flex';
   } catch(e) {
-    alert('載入失敗，請重試');
+    console.error('加入購物車讀取品項失敗', e);
+    alert('載入失敗，請重試（'+e.message+'）');
   }
   btn.disabled = false; btn.textContent = '＋ 加入購物車';
 }

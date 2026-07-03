@@ -744,7 +744,8 @@ def cart():
     return render_template('cart.html', cart=items_detail, today=today, today_30=today_30)
 
 
-@app.route('/cart/add', methods=['POST'])
+@app.route('/basket/append', methods=['POST'])
+@app.route('/cart/add', methods=['POST'])  # 保留舊路徑相容，但前端已改用 /basket/append
 def cart_add():
     data     = request.get_json()
     item_id  = data.get('item_id')

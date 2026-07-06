@@ -4,6 +4,7 @@
 {% macro render_spec_row(spec, brandIdx, item) %}
 <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
   <input type="hidden" name="spec_brand_index[]" value="{{ brandIdx }}">
+  <input type="hidden" name="spec_id[]" value="{{ spec.id if spec else '' }}">
   <input type="text" name="spec_name[]" value="{{ spec.name if spec else '' }}" placeholder="規格名稱"
          style="flex:2;min-width:100px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
   {% if not item %}
@@ -39,6 +40,7 @@
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
     <div style="flex:1">
       <label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:4px">品牌名稱</label>
+      <input type="hidden" name="brand_id[]" value="{{ brand.id if brand else '' }}">
       <input type="text" name="brand_name[]" value="{{ brand.name if brand else '' }}" required placeholder="品牌名稱"
              style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
     </div>
@@ -178,6 +180,7 @@ function addBrand() {
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
       <div style="flex:1">
         <label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:4px">品牌名稱</label>
+        <input type="hidden" name="brand_id[]" value="">
         <input type="text" name="brand_name[]" required placeholder="品牌名稱"
                style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
       </div>
@@ -194,6 +197,7 @@ function addBrand() {
       <div class="spec-list">
         <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
           <input type="hidden" name="spec_brand_index[]" value="${idx}">
+          <input type="hidden" name="spec_id[]" value="">
           <input type="text" name="spec_name[]" placeholder="規格名稱"
                  style="flex:2;min-width:100px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
           ${specFieldsHTML(!isEdit)}
@@ -217,6 +221,7 @@ function addSpec(btn, brandIdx, showFields) {
   const row = `
   <div class="spec-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
     <input type="hidden" name="spec_brand_index[]" value="${brandIdx}">
+    <input type="hidden" name="spec_id[]" value="">
     <input type="text" name="spec_name[]" placeholder="規格名稱"
            style="flex:2;min-width:100px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
     ${specFieldsHTML(showFields)}

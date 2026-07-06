@@ -113,10 +113,10 @@
 
   <div class="inv-content">
     <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">📦 品項總數</div><div class="stat-value">{{ items|length }}</div></div>
       <div class="stat-card ok-card"><div class="stat-label">✔ 庫存充足</div><div class="stat-value" id="cnt-ok">{{ ok_count.v }}</div></div>
       <div class="stat-card warn-card"><div class="stat-label">⚠ 低庫存</div><div class="stat-value" id="cnt-low">{{ low_count.v }}</div></div>
       <div class="stat-card danger-card"><div class="stat-label">✕ 缺貨</div><div class="stat-value" id="cnt-out">{{ out_count.v }}</div></div>
-      <div class="stat-card"><div class="stat-label">📦 品項總數</div><div class="stat-value">{{ items|length }}</div></div>
     </div>
     <div style="font-size:13px;color:var(--text3);margin-bottom:10px" id="section-label">品項列表（{{ items|length }} 項）</div>
 

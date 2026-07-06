@@ -9,6 +9,7 @@ notify.py ── 使用 Resend 寄送通知信
 import os
 import json
 import urllib.request
+import urllib.error
 
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 MAIL_FROM      = os.environ.get('MAIL_FROM', 'onboarding@resend.dev')
@@ -32,8 +33,17 @@ def _send(to_list: list, subject: str, html: str):
             'Content-Type':  'application/json',
         }
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        try:
+            detail = json.loads(body)
+            msg = detail.get('message') or detail.get('name') or body
+        except (json.JSONDecodeError, AttributeError):
+            msg = body or str(e)
+        raise RuntimeError(f'Resend 錯誤 ({e.code})：{msg}') from e
 
 
 def _get_notify_recipients():

@@ -86,12 +86,12 @@ def full_sync():
 
 
 # ── Append log row ────────────────────────────────────────
-def append_log_row(batch, change, reason, username):
+def append_log_row(batch, change, reason, username, applicant=''):
     """修復：每次都確認標題列，然後在最後一行後 append"""
     ws  = _sheet('異動紀錄')
     now = now_tw().strftime('%Y-%m-%d %H:%M:%S')
 
-    HEADERS = ['時間','品項','品牌','規格','批次到期日','異動','理由','進價','操作人']
+    HEADERS = ['時間','類別','品項','品牌','規格','異動','申請人','原因','操作人']
 
     # 確認第一列是標題列（如果空的或標題不對就重設）
     try:
@@ -108,13 +108,13 @@ def append_log_row(batch, change, reason, username):
     item  = brand.item
     ws.append_row([
         now,
+        item.category.name if item.category else '',
         item.name,
         brand.name,
         spec.name,
-        batch.expiry_date.isoformat() if batch.expiry_date else '',
         f'+{change}' if change > 0 else str(change),
+        applicant,
         reason,
-        float(batch.cost_price) if batch.cost_price else '',
         username,
     ])
 

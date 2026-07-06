@@ -178,7 +178,8 @@ class StockLog(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     batch_id   = db.Column(db.Integer, db.ForeignKey('batches.id'))
     change     = db.Column(db.Integer)
-    reason     = db.Column(db.String(200))
+    applicant  = db.Column(db.String(80))    # 申請人
+    reason     = db.Column(db.String(200))   # 原因
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=now_tw)
     user       = db.relationship('User', backref='logs')
@@ -728,9 +729,10 @@ def stock_in():
 @login_required
 @editor_required
 def stock_out():
-    batch_id = int(request.form['batch_id'])
-    qty      = int(request.form['qty'])
-    reason   = request.form.get('reason', '')
+    batch_id  = int(request.form['batch_id'])
+    qty       = int(request.form['qty'])
+    applicant = request.form.get('applicant', '').strip()
+    reason    = request.form.get('reason', '').strip()
 
     batch = Batch.query.get_or_404(batch_id)
     if qty > batch.qty:
@@ -742,12 +744,12 @@ def stock_out():
         batch.expiry_date = None
         batch.cost_price  = None
         batch.note        = None
-    log = StockLog(batch_id=batch_id, change=-qty, reason=reason, user_id=current_user.id)
+    log = StockLog(batch_id=batch_id, change=-qty, applicant=applicant, reason=reason, user_id=current_user.id)
     db.session.add(log); db.session.commit()
 
     try:
         from gsheet import append_log_row
-        append_log_row(batch, -qty, reason, current_user.username)
+        append_log_row(batch, -qty, reason, current_user.username, applicant=applicant)
     except Exception: pass
 
     flash(f'出庫成功（-{qty}）', 'success')
@@ -1057,14 +1059,14 @@ def admin_order_confirm(oid):
             batch.expiry_date = None
             batch.cost_price  = None
             batch.note        = None
+        order_reason = f'申請單 {order.order_no}' + (f'／{order.note}' if order.note else '')
         log = StockLog(batch_id=batch.id, change=-qty,
-                       reason=f'申請單 {order.order_no}／{order.applicant}',
+                       applicant=order.applicant, reason=order_reason,
                        user_id=current_user.id)
         db.session.add(log)
         try:
             from gsheet import append_log_row
-            append_log_row(batch, -qty,
-                           f'申請單 {order.order_no}', current_user.username)
+            append_log_row(batch, -qty, order_reason, current_user.username, applicant=order.applicant)
         except Exception: pass
 
     order.status       = 'confirmed'
@@ -1224,6 +1226,7 @@ with app.app_context():
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_on BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
+                "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS applicant VARCHAR(80)",
             ]:
                 try: conn.execute(text(sql)); conn.commit()
                 except Exception: conn.rollback()

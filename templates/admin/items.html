@@ -216,7 +216,9 @@
         {% set item_rows = [] %}
         {% for brand in item.brands %}
           {% for spec in brand.specs %}
-            {% for batch in spec.batches %}
+            {% set nonzero_batches = spec.batches | selectattr('qty', 'gt', 0) | list %}
+            {% set display_batches = nonzero_batches if nonzero_batches else spec.batches[:1] %}
+            {% for batch in display_batches %}
               {% set _ = item_rows.append({'brand':brand,'spec':spec,'batch':batch}) %}
             {% endfor %}
           {% endfor %}
@@ -386,8 +388,9 @@ document.getElementById('inSpec').addEventListener('change',function(){
 async function openOutModal(){
   const specId=document.getElementById('outSpec').value;
   if(!specId){alert('請先選擇規格');return;}
-  const r=await fetch('/api/batches_by_spec/'+specId); const batches=await r.json();
-  if(!batches.length){alert('此規格尚無批次庫存');return;}
+  const r=await fetch('/api/batches_by_spec/'+specId); const allBatches=await r.json();
+  const batches=allBatches.filter(b=>b.qty>0);
+  if(!batches.length){alert('此規格目前無庫存可出庫');return;}
   let html='';
   batches.forEach((b,i)=>{
     const exp=b.expiry_date?` · 到期：${b.expiry_date}${b.days_left<0?' (已過期)':b.days_left<=30?` (${b.days_left}天)`:''}` :'';

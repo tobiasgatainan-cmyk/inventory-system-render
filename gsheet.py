@@ -59,7 +59,7 @@ def full_sync():
     except Exception: pass
 
     now  = now_tw().strftime('%Y-%m-%d %H:%M')
-    rows = [['品項','品牌','規格','批次ID','數量','到期日','進價','安全庫存','供應商','分類','最後同步']]
+    rows = [['類別','品項','品牌','規格','批次ID','數量','安全庫存','到期日','供應商','進價','備註','最後同步']]
 
     for item in Item.query.join(Category, Item.category_id == Category.id, isouter=True)\
                           .order_by(Category.sort_order, Item.sort_order, Item.name).all():
@@ -71,13 +71,14 @@ def full_sync():
             except (ValueError, TypeError): old_qty = -999
             last_sync = now if old_qty != batch.qty else (old.get('last_sync') or now)
             rows.append([
+                item.category.name if item.category else '',
                 item.name, brand.name, spec.name, batch.id,
                 batch.qty,
-                batch.expiry_date.isoformat() if batch.expiry_date else '',
-                float(batch.cost_price) if batch.cost_price else '',
                 brand.safe_qty,
+                batch.expiry_date.isoformat() if batch.expiry_date else '',
                 batch.supplier or '',
-                item.category.name if item.category else '',
+                float(batch.cost_price) if batch.cost_price else '',
+                batch.note or '',
                 last_sync,
             ])
     ws.clear(); ws.update('A1', rows)

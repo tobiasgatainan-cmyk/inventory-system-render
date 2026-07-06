@@ -1041,7 +1041,7 @@ def admin_user_notify(uid):
 # ── Google Sheet ──────────────────────────────────────────
 @app.route('/admin/gsheet/sync', methods=['POST'])
 @login_required
-@admin_required
+@editor_required
 def gsheet_sync():
     try:
         from gsheet import full_sync
@@ -1053,7 +1053,7 @@ def gsheet_sync():
 
 @app.route('/admin/gsheet/import', methods=['POST'])
 @login_required
-@admin_required
+@editor_required
 def gsheet_import():
     try:
         from gsheet import import_from_sheet

@@ -12,7 +12,7 @@
 <table>
   <thead>
     <tr>
-      <th>帳號</th><th>Email</th><th>角色</th><th>通知信箱</th><th>接收通知</th><th>建立時間</th><th>操作</th>
+      <th>帳號</th><th>Email</th><th>角色</th><th>狀態</th><th>通知信箱</th><th>接收通知</th><th>建立時間</th><th>操作</th>
     </tr>
   </thead>
   <tbody>
@@ -25,6 +25,10 @@
       {% elif u.role == 'editor' %}<span style="color:#28a745;font-weight:600">編輯者</span>
       {% else %}<span style="color:#888">檢視者</span>{% endif %}
     </td>
+    <td>
+      {% if u.is_active %}<span style="color:#28a745;font-weight:600">啟用中</span>
+      {% else %}<span style="color:#999">已停用</span>{% endif %}
+    </td>
     <td style="font-size:12px">{{ u.notify_email or '—' }}</td>
     <td style="text-align:center">{{ '✅' if u.notify_on else '—' }}</td>
     <td style="font-size:12px;color:#aaa">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
@@ -33,8 +37,15 @@
       <button onclick="openNotify({{ u.id }}, '{{ u.notify_email or '' }}', {{ 'true' if u.notify_on else 'false' }})"
               class="btn btn-sm" style="background:#e8f0fe;color:#1a73e8;border:1px solid #a8c7fa">🔔 通知</button>
       {% if u.id != current_user.id %}
+      <form method="POST" action="{{ url_for('admin_toggle_user_active', uid=u.id) }}" style="display:inline">
+        {% if u.is_active %}
+        <button type="submit" class="btn btn-sm" style="background:#fff3cd;color:#856404;border:1px solid #ffe08a">停用</button>
+        {% else %}
+        <button type="submit" class="btn btn-sm" style="background:#e6f4ea;color:#1e7e34;border:1px solid #b7dfc0">啟用</button>
+        {% endif %}
+      </form>
       <form method="POST" action="{{ url_for('admin_delete_user', uid=u.id) }}" style="display:inline"
-            onsubmit="return confirm('確定刪除 {{ u.username }}？')">
+            onsubmit="return confirm('確定刪除 {{ u.username }}？此動作無法復原')">
         <button type="submit" class="btn btn-sm btn-danger">刪除</button>
       </form>
       {% endif %}
@@ -54,6 +65,7 @@
         <label>通知信箱</label>
         <input type="email" name="notify_email" id="notifyEmail" placeholder="填入接收通知的信箱">
         <div style="font-size:11px;color:#aaa;margin-top:4px">更改信箱時會自動寄送測試信</div>
+        <div style="font-size:11px;color:#c0474d;margin-top:4px">⚠ 目前 Resend 尚未驗證網域，僅能成功寄送到 tobiasg.a.tainan@gmail.com，其他信箱請先不要開啟通知</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
         <input type="checkbox" name="notify_on" id="notifyOn" style="width:16px;height:16px">

@@ -519,30 +519,42 @@ def admin_edit_item(iid):
             db.session.delete(brand)
         db.session.flush()
 
-        # 建立新品牌/規格
+        # 建立新品牌/規格（表單裡若重複輸入同名品牌/規格，合併成一筆，不建立重複資料）
         brand_names   = request.form.getlist('brand_name[]')
         brand_safes   = request.form.getlist('brand_safe[]')
         spec_names    = request.form.getlist('spec_name[]')
         brand_indices = request.form.getlist('spec_brand_index[]')
 
         brands_created = []
+        brand_name_map = {}
         for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
             if not bname.strip(): continue
-            brand = Brand(item_id=item.id, name=bname.strip(),
-                          safe_qty=int(bsafe or 0), sort_order=bi)
-            db.session.add(brand); db.session.flush()
+            key = bname.strip()
+            if key in brand_name_map:
+                brand = brand_name_map[key]
+            else:
+                brand = Brand(item_id=item.id, name=key,
+                              safe_qty=int(bsafe or 0), sort_order=bi)
+                db.session.add(brand); db.session.flush()
+                brand_name_map[key] = brand
             brands_created.append(brand)
 
+        spec_name_map = {}
         for si, (sname, bidx) in enumerate(zip(spec_names, brand_indices)):
             if not sname.strip(): continue
             try: bidx = int(bidx)
             except (ValueError, TypeError): bidx = 0
             if bidx >= len(brands_created): continue
-            spec = Spec(brand_id=brands_created[bidx].id, name=sname.strip(), sort_order=si)
+            brand = brands_created[bidx]
+            skey  = (brand.id, sname.strip())
+            if skey in spec_name_map:
+                continue  # 同一次提交裡的重複規格，批次已經在第一次出現時搬過了
+            spec = Spec(brand_id=brand.id, name=sname.strip(), sort_order=si)
             db.session.add(spec); db.session.flush()
+            spec_name_map[skey] = spec
 
             # 把對應的舊批次重新指向新 spec
-            key = (brands_created[bidx].name.strip(), sname.strip())
+            key = (brand.name.strip(), sname.strip())
             if key in old_batches:
                 for batch in old_batches[key]:
                     new_batch = Batch(
@@ -575,22 +587,42 @@ def _save_brands(item_id, form, is_edit=False):
     spec_notes     = form.getlist('spec_note[]')
     brand_indices  = form.getlist('spec_brand_index[]')
 
-    brands_created = []
+    # 同一品項底下，同名品牌一律重複使用既有的（不管是這次表單裡重複輸入，
+    # 還是資料庫裡本來就已經存在），避免產生重複品牌
+    brands_created  = []
+    brand_name_map  = {}
     for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
         if not bname.strip(): continue
-        brand = Brand(item_id=item_id, name=bname.strip(),
-                      safe_qty=int(bsafe or 0), sort_order=bi)
-        db.session.add(brand); db.session.flush()
+        key = bname.strip()
+        if key in brand_name_map:
+            brand = brand_name_map[key]
+        else:
+            brand = Brand.query.filter_by(item_id=item_id, name=key).first()
+            if not brand:
+                brand = Brand(item_id=item_id, name=key,
+                              safe_qty=int(bsafe or 0), sort_order=bi)
+                db.session.add(brand); db.session.flush()
+            brand_name_map[key] = brand
         brands_created.append(brand)
 
+    # 同一品牌底下，同名規格也一律重複使用既有的，道理相同
+    spec_name_map = {}
     for si, (sname, sqty, sexp, scost, ssup, snote, bidx) in enumerate(
             zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_suppliers, spec_notes, brand_indices)):
         if not sname.strip(): continue
         try: bidx = int(bidx)
         except (ValueError, TypeError): bidx = 0
         if bidx >= len(brands_created): continue
-        spec = Spec(brand_id=brands_created[bidx].id, name=sname.strip(), sort_order=si)
-        db.session.add(spec); db.session.flush()
+        brand = brands_created[bidx]
+        skey = (brand.id, sname.strip())
+        if skey in spec_name_map:
+            spec = spec_name_map[skey]
+        else:
+            spec = Spec.query.filter_by(brand_id=brand.id, name=sname.strip()).first()
+            if not spec:
+                spec = Spec(brand_id=brand.id, name=sname.strip(), sort_order=si)
+                db.session.add(spec); db.session.flush()
+            spec_name_map[skey] = spec
 
         # 編輯模式下，只建立 spec，不建立新 batch（庫存由入庫管理）
         # 新增模式下，建立初始 batch

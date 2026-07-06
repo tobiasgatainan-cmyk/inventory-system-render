@@ -183,7 +183,6 @@
 <div class="adm-main">
   <div class="adm-tabs">
     <button class="atab active" onclick="switchTab('items',this)">📦 品項管理</button>
-    <button class="atab"        onclick="switchTab('logs',this)">📋 異動紀錄</button>
     <button class="atab"        onclick="switchTab('sort',this)">↕️ 排序管理</button>
   </div>
 
@@ -266,30 +265,6 @@
       </tbody>
     </table>
     </div>
-  </div>
-
-  <!-- 異動紀錄 -->
-  <div class="tab-panel" id="panel-logs">
-    <table class="log-table">
-      <thead><tr><th>時間</th><th>品項</th><th>品牌</th><th>規格</th><th>異動</th><th>原因／記錄人</th></tr></thead>
-      <tbody>
-      {% for log in all_logs %}
-      <tr style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(254,123,129,.06){% endif %}">
-        <td style="color:var(--text3);white-space:nowrap;font-size:12px">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
-        <td style="font-weight:600">{{ log.batch.spec.brand.item.name if log.batch else '—' }}</td>
-        <td style="font-size:12px;color:var(--text2)">{{ log.batch.spec.brand.name if log.batch else '—' }}</td>
-        <td style="font-size:12px;color:var(--text3)">{{ log.batch.spec.name if log.batch else '—' }}</td>
-        <td><span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;
-          background:{% if log.change > 0 %}var(--ok-light){% else %}var(--accent-light){% endif %};
-          color:{% if log.change > 0 %}var(--ok){% else %}var(--accent){% endif %}">
-          {{ '+' if log.change > 0 else '' }}{{ log.change }}</span></td>
-        <td style="font-size:12px;color:var(--text3)">{{ log.reason or '—' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">尚無紀錄</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
   </div>
 
   <!-- 排序管理 -->

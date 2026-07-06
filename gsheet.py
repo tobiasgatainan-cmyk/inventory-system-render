@@ -25,6 +25,27 @@ def _sheet(tab):
 
 
 # ── Full sync ─────────────────────────────────────────────
+def _display_rows_for_item(item):
+    """依「品牌名稱＋規格名稱」分組：同組有庫存只留有庫存的批次，
+    全部是 0 才保留一筆 —— 與後台管理頁面的顯示邏輯保持一致。"""
+    groups = {}
+    order  = []
+    for brand in item.brands:
+        for spec in brand.specs:
+            key = (brand.name, spec.name)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            for batch in spec.batches:
+                groups[key].append({'brand': brand, 'spec': spec, 'batch': batch})
+    rows = []
+    for key in order:
+        grp = groups[key]
+        nonzero = [r for r in grp if r['batch'].qty > 0]
+        rows.extend(nonzero if nonzero else grp[:1])
+    return rows
+
+
 def full_sync():
     from main import Item, Category
     ws = _sheet('庫存')
@@ -42,24 +63,23 @@ def full_sync():
 
     for item in Item.query.join(Category, Item.category_id == Category.id, isouter=True)\
                           .order_by(Category.sort_order, Item.sort_order, Item.name).all():
-        for brand in item.brands:
-            for spec in brand.specs:
-                for batch in spec.batches:
-                    key = (item.name, brand.name, spec.name, str(batch.id))
-                    old = existing.get(key, {})
-                    try: old_qty = int(old.get('qty', -999))
-                    except (ValueError, TypeError): old_qty = -999
-                    last_sync = now if old_qty != batch.qty else (old.get('last_sync') or now)
-                    rows.append([
-                        item.name, brand.name, spec.name, batch.id,
-                        batch.qty,
-                        batch.expiry_date.isoformat() if batch.expiry_date else '',
-                        float(batch.cost_price) if batch.cost_price else '',
-                        brand.safe_qty,
-                        batch.supplier or '',
-                        item.category.name if item.category else '',
-                        last_sync,
-                    ])
+        for row in _display_rows_for_item(item):
+            brand, spec, batch = row['brand'], row['spec'], row['batch']
+            key = (item.name, brand.name, spec.name, str(batch.id))
+            old = existing.get(key, {})
+            try: old_qty = int(old.get('qty', -999))
+            except (ValueError, TypeError): old_qty = -999
+            last_sync = now if old_qty != batch.qty else (old.get('last_sync') or now)
+            rows.append([
+                item.name, brand.name, spec.name, batch.id,
+                batch.qty,
+                batch.expiry_date.isoformat() if batch.expiry_date else '',
+                float(batch.cost_price) if batch.cost_price else '',
+                brand.safe_qty,
+                batch.supplier or '',
+                item.category.name if item.category else '',
+                last_sync,
+            ])
     ws.clear(); ws.update('A1', rows)
     return f'已寫入 {len(rows)-1} 筆'
 
@@ -100,8 +120,8 @@ def append_log_row(batch, change, reason, username):
 
 # ── Append purchase record ────────────────────────────────
 def append_purchase_record(batch, username):
-    """入庫時記錄進貨歷史"""
-    ws  = _sheet('進貨記錄')
+    """入庫時記錄歷史進貨資料，方便日後比價、選擇進貨管道"""
+    ws  = _sheet('歷史庫存比較')
     now = now_tw().strftime('%Y-%m-%d %H:%M')
 
     HEADERS = ['時間','品項','品牌','規格','入庫數量','到期日','進價','供應商','備註','操作人']

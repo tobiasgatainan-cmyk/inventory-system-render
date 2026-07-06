@@ -439,7 +439,6 @@ def admin_items():
                             .order_by(Category.sort_order, Category.name, Item.sort_order, Item.name).all()
     cats        = Category.query.order_by(Category.sort_order, Category.name).all()
     recent_logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(8).all()
-    all_logs    = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
     today       = now_tw().date()
     today_30    = today + timedelta(days=30)
 
@@ -466,7 +465,7 @@ def admin_items():
         item_display_rows[item.id] = rows
 
     return render_template('admin/items.html', items=items, cats=cats,
-                           recent_logs=recent_logs, all_logs=all_logs,
+                           recent_logs=recent_logs,
                            today=today, today_30=today_30,
                            item_display_rows=item_display_rows)
 

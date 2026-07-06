@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user, AnonymousUserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -59,6 +60,7 @@ class User(UserMixin, db.Model):
     role          = db.Column(db.String(20), default='viewer')
     notify_email  = db.Column(db.String(120), nullable=True)   # 通知信箱
     notify_on     = db.Column(db.Boolean, default=False)       # 是否接收通知
+    is_active     = db.Column(db.Boolean, default=True)        # 是否啟用（停用後無法登入）
     created_at    = db.Column(db.DateTime, default=now_tw)
 
     def is_admin(self):  return self.role == 'admin'
@@ -291,10 +293,13 @@ def login():
         return redirect(url_for('index'))
     if request.method == 'POST':
         user = User.query.filter_by(username=request.form['username']).first()
-        if user and check_password_hash(user.password, request.form['password']):
+        if user and not user.is_active:
+            flash('此帳號已被停用，請聯絡管理員', 'danger')
+        elif user and check_password_hash(user.password, request.form['password']):
             login_user(user, remember=True)
             return redirect(request.args.get('next') or url_for('index'))
-        flash('帳號或密碼錯誤', 'danger')
+        else:
+            flash('帳號或密碼錯誤', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -391,6 +396,19 @@ def admin_edit_user(uid):
         return redirect(url_for('admin_users'))
     return render_template('admin/user_form.html', user=u)
 
+@app.route('/admin/users/<int:uid>/toggle-active', methods=['POST'])
+@login_required
+@admin_required
+def admin_toggle_user_active(uid):
+    u = User.query.get_or_404(uid)
+    if u.id == current_user.id:
+        flash('無法停用自己', 'danger')
+    else:
+        u.is_active = not u.is_active
+        db.session.commit()
+        flash(f'已{"啟用" if u.is_active else "停用"}「{u.username}」', 'success')
+    return redirect(url_for('admin_users'))
+
 @app.route('/admin/users/<int:uid>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -399,7 +417,16 @@ def admin_delete_user(uid):
     if u.id == current_user.id:
         flash('無法刪除自己', 'danger')
     else:
-        db.session.delete(u); db.session.commit(); flash('已刪除', 'success')
+        try:
+            # 刪除前先解除歷史紀錄的關聯（改成 NULL），避免外鍵限制擋下刪除
+            StockLog.query.filter_by(user_id=u.id).update({'user_id': None})
+            Order.query.filter_by(confirmed_by=u.id).update({'confirmed_by': None})
+            db.session.delete(u)
+            db.session.commit()
+            flash('已刪除', 'success')
+        except IntegrityError:
+            db.session.rollback()
+            flash(f'無法刪除「{u.username}」，請稍後再試或聯絡系統管理員。', 'danger')
     return redirect(url_for('admin_users'))
 
 
@@ -1076,6 +1103,7 @@ with app.app_context():
                 "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_email VARCHAR(120)",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_on BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE users      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
             ]:
                 try: conn.execute(text(sql)); conn.commit()

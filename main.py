@@ -1098,6 +1098,54 @@ def api_low_stock():
     return jsonify(low)
 
 
+def merge_duplicates():
+    """開機時自動合併資料清理：
+    同一品項底下若有「名稱相同」的重複品牌，或同一品牌底下有「名稱相同」的重複規格，
+    保留 ID 最小（最早建立）的一筆，把其餘的規格／批次搬過去後刪除重複的品牌／規格。
+    這是可重複執行的安全操作：沒有重複資料時完全不會有任何變動。
+    """
+    from collections import defaultdict
+    merged_brands = merged_specs = 0
+
+    for item in Item.query.all():
+        by_name = defaultdict(list)
+        for b in Brand.query.filter_by(item_id=item.id).order_by(Brand.id).all():
+            by_name[b.name].append(b)
+        for name, blist in by_name.items():
+            if len(blist) <= 1:
+                continue
+            keeper, dups = blist[0], blist[1:]
+            for dup in dups:
+                for spec in list(Spec.query.filter_by(brand_id=dup.id).all()):
+                    spec.brand_id = keeper.id
+                db.session.flush()
+                db.session.delete(dup)
+                merged_brands += 1
+        db.session.flush()
+
+        # 品牌內重複規格
+        for brand in Brand.query.filter_by(item_id=item.id).all():
+            by_spec_name = defaultdict(list)
+            for s in Spec.query.filter_by(brand_id=brand.id).order_by(Spec.id).all():
+                by_spec_name[s.name].append(s)
+            for name, slist in by_spec_name.items():
+                if len(slist) <= 1:
+                    continue
+                keeper, dups = slist[0], slist[1:]
+                for dup in dups:
+                    for batch in list(Batch.query.filter_by(spec_id=dup.id).all()):
+                        batch.spec_id = keeper.id
+                    db.session.flush()
+                    db.session.delete(dup)
+                    merged_specs += 1
+
+    if merged_brands or merged_specs:
+        db.session.commit()
+        app.logger.info(f'merge_duplicates：合併品牌 {merged_brands} 筆、規格 {merged_specs} 筆')
+    else:
+        db.session.rollback()
+
+
 # ── Bootstrap ─────────────────────────────────────────────
 with app.app_context():
     # 支援強制重建（環境變數 FORCE_DB_RESET=1）
@@ -1133,6 +1181,7 @@ with app.app_context():
                 except Exception: conn.rollback()
 
     seed_data()
+    merge_duplicates()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

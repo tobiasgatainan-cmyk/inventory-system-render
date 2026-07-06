@@ -507,72 +507,88 @@ def admin_edit_item(iid):
         item.unit        = request.form['unit']
         item.category_id = int(request.form['category_id']) if request.form['category_id'] else None
 
-        # 收集現有批次，以 (品牌名, 規格名) 為 key
-        old_batches = {}
-        for brand in item.brands:
-            for spec in brand.specs:
-                key = (brand.name.strip(), spec.name.strip())
-                old_batches[key] = list(spec.batches)
-
-        # 刪除舊品牌/規格（批次會被 cascade 刪除）
-        for brand in item.brands:
-            db.session.delete(brand)
-        db.session.flush()
-
-        # 建立新品牌/規格（表單裡若重複輸入同名品牌/規格，合併成一筆，不建立重複資料）
+        brand_ids     = request.form.getlist('brand_id[]')
         brand_names   = request.form.getlist('brand_name[]')
         brand_safes   = request.form.getlist('brand_safe[]')
+        spec_ids      = request.form.getlist('spec_id[]')
         spec_names    = request.form.getlist('spec_name[]')
         brand_indices = request.form.getlist('spec_brand_index[]')
 
-        brands_created = []
-        brand_name_map = {}
-        for bi, (bname, bsafe) in enumerate(zip(brand_names, brand_safes)):
+        # 品牌：有帶 brand_id 就原地更新名稱／安全庫存；沒有的話，
+        # 同品項底下若已有同名品牌就沿用，否則才新增，避免產生重複資料
+        brands_by_idx  = {}
+        kept_brand_ids = set()
+        for bi, (bid, bname, bsafe) in enumerate(zip(brand_ids, brand_names, brand_safes)):
             if not bname.strip(): continue
-            key = bname.strip()
-            if key in brand_name_map:
-                brand = brand_name_map[key]
+            bname = bname.strip()
+            brand = Brand.query.get(int(bid)) if bid.strip() else None
+            if brand and brand.item_id != item.id:
+                brand = None  # 防呆：id 對不到這個品項就當作新的
+            if not brand:
+                brand = Brand.query.filter_by(item_id=item.id, name=bname).first()
+            if brand:
+                brand.name      = bname
+                brand.safe_qty  = int(bsafe or 0)
+                brand.sort_order = bi
             else:
-                brand = Brand(item_id=item.id, name=key,
-                              safe_qty=int(bsafe or 0), sort_order=bi)
+                brand = Brand(item_id=item.id, name=bname, safe_qty=int(bsafe or 0), sort_order=bi)
                 db.session.add(brand); db.session.flush()
-                brand_name_map[key] = brand
-            brands_created.append(brand)
+            brands_by_idx[bi] = brand
+            kept_brand_ids.add(brand.id)
 
-        spec_name_map = {}
-        for si, (sname, bidx) in enumerate(zip(spec_names, brand_indices)):
+        # 規格：邏輯相同，原地更新優先，其次同名沿用，最後才新增
+        kept_spec_ids = set()
+        for si, (sid, sname, bidx) in enumerate(zip(spec_ids, spec_names, brand_indices)):
             if not sname.strip(): continue
+            sname = sname.strip()
             try: bidx = int(bidx)
             except (ValueError, TypeError): bidx = 0
-            if bidx >= len(brands_created): continue
-            brand = brands_created[bidx]
-            skey  = (brand.id, sname.strip())
-            if skey in spec_name_map:
-                continue  # 同一次提交裡的重複規格，批次已經在第一次出現時搬過了
-            spec = Spec(brand_id=brand.id, name=sname.strip(), sort_order=si)
-            db.session.add(spec); db.session.flush()
-            spec_name_map[skey] = spec
-
-            # 把對應的舊批次重新指向新 spec
-            key = (brand.name.strip(), sname.strip())
-            if key in old_batches:
-                for batch in old_batches[key]:
-                    new_batch = Batch(
-                        spec_id     = spec.id,
-                        qty         = batch.qty,
-                        expiry_date = batch.expiry_date,
-                        cost_price  = batch.cost_price,
-                        supplier    = batch.supplier,
-                        note        = batch.note,
-                        created_at  = batch.created_at,
-                    )
-                    db.session.add(new_batch)
+            brand = brands_by_idx.get(bidx)
+            if not brand: continue
+            spec = Spec.query.get(int(sid)) if sid.strip() else None
+            if spec and spec.brand_id not in kept_brand_ids:
+                spec = None
+            if not spec:
+                spec = Spec.query.filter_by(brand_id=brand.id, name=sname).first()
+            if spec:
+                spec.name       = sname
+                spec.brand_id   = brand.id
+                spec.sort_order = si
             else:
-                # 新規格，建立空批次
-                db.session.add(Batch(spec_id=spec.id, qty=0))
+                spec = Spec(brand_id=brand.id, name=sname, sort_order=si)
+                db.session.add(spec); db.session.flush()
+                db.session.add(Batch(spec_id=spec.id, qty=0))  # 新規格先給一筆空批次，等待入庫
+            kept_spec_ids.add(spec.id)
+
+        # 刪除使用者真的移除的品牌／規格；若底下還有批次紀錄（例如曾被申請單引用），
+        # 為避免違反資料庫關聯限制，不刪除，改為提示
+        blocked = []
+        for brand in list(item.brands):
+            if brand.id in kept_brand_ids:
+                continue
+            has_batches = any(spec.batches for spec in brand.specs)
+            if has_batches:
+                blocked.append(f'品牌「{brand.name}」')
+            else:
+                db.session.delete(brand)
+        db.session.flush()
+
+        for brand in item.brands:
+            if brand.id not in kept_brand_ids:
+                continue
+            for spec in list(brand.specs):
+                if spec.id in kept_spec_ids:
+                    continue
+                if spec.batches:
+                    blocked.append(f'規格「{brand.name}／{spec.name}」')
+                else:
+                    db.session.delete(spec)
 
         db.session.commit()
-        flash('更新成功', 'success')
+        if blocked:
+            flash('已更新，但以下項目仍有庫存批次紀錄（可能曾被申請單引用），未刪除：' + '、'.join(blocked), 'warning')
+        else:
+            flash('更新成功', 'success')
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=item, cats=cats)
 

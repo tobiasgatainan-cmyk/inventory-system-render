@@ -213,16 +213,7 @@
       </thead>
       <tbody>
       {% for item in items %}
-        {% set item_rows = [] %}
-        {% for brand in item.brands %}
-          {% for spec in brand.specs %}
-            {% set nonzero_batches = spec.batches | selectattr('qty', 'gt', 0) | list %}
-            {% set display_batches = nonzero_batches if nonzero_batches else spec.batches[:1] %}
-            {% for batch in display_batches %}
-              {% set _ = item_rows.append({'brand':brand,'spec':spec,'batch':batch}) %}
-            {% endfor %}
-          {% endfor %}
-        {% endfor %}
+        {% set item_rows = item_display_rows.get(item.id, []) %}
         {% if item_rows %}
         {% for row in item_rows %}
         {% set batch = row.batch %}

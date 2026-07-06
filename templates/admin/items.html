@@ -76,14 +76,18 @@
   <div class="modal">
     <h3>⬆️ 出庫選擇批次</h3>
     <div id="batchList"></div>
+    <div class="fc" style="margin-top:12px">
+      <label class="fl">出庫數量</label>
+      <input type="number" class="fi" id="outQty" min="1" value="1">
+    </div>
     <div class="form-row-2" style="margin-top:12px">
       <div class="fc">
-        <label class="fl">出庫數量</label>
-        <input type="number" class="fi" id="outQty" min="1" value="1">
+        <label class="fl">申請人</label>
+        <input type="text" class="fi" id="outApplicant" placeholder="姓名">
       </div>
       <div class="fc">
-        <label class="fl">記錄人／原因</label>
-        <input type="text" class="fi" id="outReason" placeholder="姓名／原因">
+        <label class="fl">原因</label>
+        <input type="text" class="fi" id="outReason" placeholder="原因（選填）">
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
@@ -95,6 +99,7 @@
 <form method="POST" action="{{ url_for('stock_out') }}" id="outForm" style="display:none">
   <input type="hidden" name="batch_id" id="outBatchId">
   <input type="hidden" name="qty"      id="outQtyHidden">
+  <input type="hidden" name="applicant" id="outApplicantHidden">
   <input type="hidden" name="reason"   id="outReasonHidden">
 </form>
 
@@ -377,6 +382,7 @@ function submitOut(){
   if(qty<1){alert('請輸入出庫數量');return;}
   document.getElementById('outBatchId').value=sel.value;
   document.getElementById('outQtyHidden').value=qty;
+  document.getElementById('outApplicantHidden').value=document.getElementById('outApplicant').value;
   document.getElementById('outReasonHidden').value=document.getElementById('outReason').value;
   document.getElementById('outForm').submit();
   closeOutModal();

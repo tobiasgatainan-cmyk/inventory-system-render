@@ -8,7 +8,7 @@
 <div class="card" style="padding:0;overflow:hidden">
 <table>
   <thead>
-    <tr><th>時間</th><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>異動</th><th>理由</th><th>操作人</th></tr>
+    <tr><th>時間</th><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>異動</th><th>申請人</th><th>原因</th><th>操作人</th></tr>
   </thead>
   <tbody>
   {% for log in logs %}
@@ -28,11 +28,12 @@
         {{ '+' if log.change > 0 else '' }}{{ log.change }}
       </span>
     </td>
+    <td style="font-size:12px;color:#666">{{ log.applicant or '—' }}</td>
     <td style="font-size:12px;color:#666">{{ log.reason or '—' }}</td>
     <td style="font-size:12px">{{ log.user.username if log.user else '—' }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="8" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
+  <tr><td colspan="9" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
   {% endfor %}
   </tbody>
 </table>

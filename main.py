@@ -442,9 +442,33 @@ def admin_items():
     all_logs    = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
     today       = now_tw().date()
     today_30    = today + timedelta(days=30)
+
+    # 依「品牌名稱＋規格名稱」分組（避免同名品牌被誤判為不同項），
+    # 同組內只要有任何一筆還有庫存，就只顯示有庫存的批次；
+    # 若整組都是 0，才保留一筆當作預留紀錄。
+    item_display_rows = {}
+    for item in items:
+        groups = {}      # key -> list of {'brand','spec','batch'}
+        order  = []      # 保留第一次出現的順序
+        for brand in item.brands:
+            for spec in brand.specs:
+                key = (brand.name, spec.name)
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                for batch in spec.batches:
+                    groups[key].append({'brand': brand, 'spec': spec, 'batch': batch})
+        rows = []
+        for key in order:
+            grp = groups[key]
+            nonzero = [r for r in grp if r['batch'].qty > 0]
+            rows.extend(nonzero if nonzero else grp[:1])
+        item_display_rows[item.id] = rows
+
     return render_template('admin/items.html', items=items, cats=cats,
                            recent_logs=recent_logs, all_logs=all_logs,
-                           today=today, today_30=today_30)
+                           today=today, today_30=today_30,
+                           item_display_rows=item_display_rows)
 
 @app.route('/admin/items/add', methods=['GET', 'POST'])
 @login_required

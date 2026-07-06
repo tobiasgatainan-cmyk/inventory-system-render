@@ -195,7 +195,7 @@
         <option value="">所有類別</option>
         {% for c in cats %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
       </select>
-      {% if current_user.is_admin() %}
+      {% if current_user.can_edit() %}
       <form method="POST" action="{{ url_for('gsheet_sync') }}" style="margin:0">
         <button type="submit" style="padding:7px 12px;background:var(--ok-light);color:var(--ok);border:1px solid #8ecaaa;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">📊 同步至 Sheet</button>
       </form>

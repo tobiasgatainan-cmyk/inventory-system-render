@@ -31,6 +31,8 @@ def _send(to_list: list, subject: str, html: str):
         headers={
             'Authorization': f'Bearer {RESEND_API_KEY}',
             'Content-Type':  'application/json',
+            'Accept':        'application/json',
+            'User-Agent':    'MeishanFoundation-InventorySystem/1.0 (+https://inventory-system-render.onrender.com)',
         }
     )
     try:

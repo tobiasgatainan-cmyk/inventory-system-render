@@ -22,6 +22,8 @@
 .btn-secondary{background:#f0f0f0;color:#333}.btn-secondary:hover{background:#e0e0e0}
 .empty-state{text-align:center;padding:48px;color:#a8958c}
 .pending-badge{background:#fe7b81;color:white;border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:6px}
+.fi{padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;background:white;outline:none;font-family:inherit}
+.fi:focus{border-color:#fe7b81}
 </style>
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
@@ -37,39 +39,52 @@
 
 {% if view == 'shortage' %}
 
-<div class="card" style="padding:0;overflow:hidden">
-<table>
-  <thead>
-    <tr>
-      <th>回報時間</th><th>申請人</th><th>想要的品項</th><th>需求數量／說明</th><th>狀態</th><th>操作</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for r in shortage_reqs %}
-  <tr style="{% if r.resolved %}opacity:.5{% endif %}">
-    <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-    <td style="font-weight:600">{{ r.applicant }}</td>
-    <td>{{ r.item_name }}</td>
-    <td style="font-size:13px;color:#666">{{ r.note or '—' }}</td>
-    <td>
-      {% if r.resolved %}<span style="color:#28a745;font-weight:600">已處理</span>
-      {% else %}<span style="color:#f0b87a;font-weight:600">待處理</span>{% endif %}
-    </td>
-    <td>
-      <form method="POST" action="{{ url_for('admin_toggle_shortage', rid=r.id) }}" style="display:inline">
-        <button type="submit" class="btn-sm" style="background:{% if r.resolved %}#f0f0f0{% else %}#e6f4ea{% endif %};
-          color:{% if r.resolved %}#666{% else %}#1e7e34{% endif %};border:1px solid #ddd">
-          {{ '標示為待處理' if r.resolved else '標示為已處理' }}
-        </button>
-      </form>
-    </td>
-  </tr>
-  {% else %}
-  <tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">目前沒有回報紀錄</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="status-tabs" style="margin-bottom:16px">
+  <a href="{{ url_for('admin_orders', view='shortage', sr_status='pending') }}"
+     class="stab {% if sr_status=='pending' %}active{% endif %}">
+    待處理{% if shortage_pending_count %}<span class="pending-badge">{{ shortage_pending_count }}</span>{% endif %}
+  </a>
+  <a href="{{ url_for('admin_orders', view='shortage', sr_status='resolved') }}"
+     class="stab {% if sr_status=='resolved' %}active{% endif %}">已處理</a>
 </div>
+
+{% if shortage_reqs %}
+{% for r in shortage_reqs %}
+<div class="order-card">
+  <div class="order-header">
+    <div>
+      <span class="order-no">{{ r.item_name }}</span>
+      <span class="badge {% if r.resolved %}badge-confirmed{% else %}badge-pending{% endif %}" style="margin-left:8px">
+        {{ '已處理' if r.resolved else '待處理' }}
+      </span>
+    </div>
+    <span class="order-time">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+  </div>
+  <div class="order-applicant">👤 {{ r.applicant }}</div>
+  {% if r.note %}
+  <div style="font-size:12px;color:#a8958c;margin-bottom:8px">需求數量／說明：{{ r.note }}</div>
+  {% endif %}
+  <form method="POST">
+    <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:4px">處理備註（如何處理）</label>
+    <textarea name="handle_note" rows="2" class="fi" style="width:100%;resize:vertical;box-sizing:border-box;margin-bottom:8px"
+              placeholder="例如：已採購，預計下週到貨">{{ r.handle_note or '' }}</textarea>
+    <div style="display:flex;gap:8px">
+      <button type="submit" formaction="{{ url_for('admin_shortage_note', rid=r.id) }}" class="btn-sm btn-secondary">💾 儲存備註</button>
+      <button type="submit" formaction="{{ url_for('admin_toggle_shortage', rid=r.id) }}"
+              class="btn-sm" style="background:{% if r.resolved %}#f0f0f0{% else %}#e6f4ea{% endif %};
+              color:{% if r.resolved %}#666{% else %}#1e7e34{% endif %};border:1px solid #ddd">
+        {{ '標示為待處理' if r.resolved else '標示為已處理' }}
+      </button>
+    </div>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+  <div style="font-size:40px;margin-bottom:12px">📭</div>
+  <div>目前沒有{{ '已處理' if sr_status=='resolved' else '待處理' }}的回報</div>
+</div>
+{% endif %}
 
 {% else %}
 
@@ -103,16 +118,15 @@
     {% endfor %}
   </div>
   {% if order.note %}
-  <div style="font-size:12px;color:#a8958c;margin-bottom:8px">備註：{{ order.note }}</div>
+  <div style="font-size:12px;color:#a8958c;margin-bottom:4px">申請人備註：{{ order.note }}</div>
+  {% endif %}
+  {% if order.admin_note %}
+  <div style="font-size:12px;color:#6b5a52;margin-bottom:8px">
+    {% if order.status == 'cancelled' %}取消原因{% else %}出貨備註{% endif %}：{{ order.admin_note }}
+  </div>
   {% endif %}
   <div style="display:flex;gap:8px">
     <a href="{{ url_for('admin_order_detail', oid=order.id) }}" class="btn-sm btn-primary">查看詳情</a>
-    {% if order.status == 'pending' %}
-    <form method="POST" action="{{ url_for('admin_order_cancel', oid=order.id) }}" style="display:inline"
-          onsubmit="return confirm('確定取消此申請單？')">
-      <button type="submit" class="btn-sm btn-secondary">取消申請</button>
-    </form>
-    {% endif %}
   </div>
 </div>
 {% endfor %}

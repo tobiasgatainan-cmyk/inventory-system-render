@@ -186,6 +186,17 @@ class StockLog(db.Model):
     batch      = db.relationship('Batch', backref='logs')
 
 
+class ShortageRequest(db.Model):
+    """前台申請人回報「缺貨」或「找不到需要的品項」"""
+    __tablename__ = 'shortage_requests'
+    id         = db.Column(db.Integer, primary_key=True)
+    item_name  = db.Column(db.String(120), nullable=False)   # 想要的品項名稱
+    note       = db.Column(db.String(300), nullable=True)    # 說明／用途
+    applicant  = db.Column(db.String(80), nullable=False)    # 申請人
+    resolved   = db.Column(db.Boolean, default=False)        # 是否已處理
+    created_at = db.Column(db.DateTime, default=now_tw)
+
+
 class Order(db.Model):
     __tablename__ = 'orders'
     id           = db.Column(db.Integer, primary_key=True)
@@ -842,6 +853,45 @@ def cart():
                 'qty':        entry['qty'],
             })
     return render_template('cart.html', cart=items_detail, today=today, today_30=today_30)
+
+
+@app.route('/report_shortage', methods=['POST'])
+def report_shortage():
+    data      = request.get_json(silent=True) or request.form
+    item_name = (data.get('item_name') or '').strip()
+    applicant = (data.get('applicant') or '').strip()
+    note      = (data.get('note') or '').strip()
+    if not item_name or not applicant:
+        return jsonify({'ok': False, 'error': '請填寫品項名稱與申請人'}), 400
+
+    req = ShortageRequest(item_name=item_name, applicant=applicant, note=note)
+    db.session.add(req); db.session.commit()
+
+    try:
+        from notify import send_shortage_notify
+        send_shortage_notify(req)
+    except Exception as e:
+        app.logger.warning(f'send_shortage_notify failed: {e}')
+
+    return jsonify({'ok': True})
+
+
+@app.route('/admin/shortage_requests')
+@login_required
+@editor_required
+def admin_shortage_requests():
+    reqs = ShortageRequest.query.order_by(ShortageRequest.resolved, ShortageRequest.created_at.desc()).all()
+    return render_template('admin/shortage_requests.html', reqs=reqs)
+
+
+@app.route('/admin/shortage_requests/<int:rid>/toggle', methods=['POST'])
+@login_required
+@editor_required
+def admin_toggle_shortage(rid):
+    req = ShortageRequest.query.get_or_404(rid)
+    req.resolved = not req.resolved
+    db.session.commit()
+    return redirect(url_for('admin_shortage_requests'))
 
 
 @app.route('/basket/append', methods=['POST'])

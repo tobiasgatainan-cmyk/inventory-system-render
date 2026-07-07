@@ -103,6 +103,32 @@ def send_order_notify(order):
     _send(recipients, f'【庫存申請】{order.applicant} 提交申請單 {order.order_no}', html)
 
 
+def send_shortage_notify(req):
+    """前台回報缺貨／找不到品項時通知管理員"""
+    recipients = _get_notify_recipients()
+    if not recipients:
+        return
+
+    admin_url = f'{SITE_URL}/admin/shortage_requests'
+    html = f"""
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#f0b87a;color:white;padding:16px 24px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0">📢 缺貨／品項需求回報</h2>
+      </div>
+      <div style="background:#fff;padding:24px;border:1px solid #edddd0;border-top:none;border-radius:0 0 8px 8px">
+        <p><strong>申請人：</strong>{req.applicant}</p>
+        <p><strong>想要的品項：</strong>{req.item_name}</p>
+        {'<p><strong>說明：</strong>' + req.note + '</p>' if req.note else ''}
+        <p style="color:#999;font-size:13px">回報時間：{req.created_at.strftime('%Y-%m-%d %H:%M')}</p>
+        <a href="{admin_url}" style="display:inline-block;padding:10px 20px;background:#f0b87a;color:white;text-decoration:none;border-radius:6px;font-weight:bold">
+          前往後台查看
+        </a>
+      </div>
+    </div>
+    """
+    _send(recipients, f'【庫存回報】{req.applicant} 反映「{req.item_name}」缺貨／需求', html)
+
+
 def send_test_email(to_email: str, username: str):
     """寄送測試信"""
     html = f"""

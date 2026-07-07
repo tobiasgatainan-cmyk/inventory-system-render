@@ -194,6 +194,7 @@ class ShortageRequest(db.Model):
     note       = db.Column(db.String(300), nullable=True)    # 說明／用途
     applicant  = db.Column(db.String(80), nullable=False)    # 申請人
     resolved   = db.Column(db.Boolean, default=False)        # 是否已處理
+    handle_note = db.Column(db.String(300), nullable=True)   # 處理備註（如何處理）
     created_at = db.Column(db.DateTime, default=now_tw)
 
 
@@ -205,6 +206,7 @@ class Order(db.Model):
     status       = db.Column(db.String(20), default='pending')
     # pending=待處理 / confirmed=已出貨 / cancelled=已取消
     note         = db.Column(db.String(300), nullable=True)
+    admin_note   = db.Column(db.String(300), nullable=True)   # 出貨調整說明／取消原因
     created_at   = db.Column(db.DateTime, default=now_tw)
     confirmed_at = db.Column(db.DateTime, nullable=True)
     confirmed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -888,9 +890,25 @@ def admin_shortage_requests():
 @editor_required
 def admin_toggle_shortage(rid):
     req = ShortageRequest.query.get_or_404(rid)
+    note = request.form.get('handle_note', '').strip()
+    if note:
+        req.handle_note = note
     req.resolved = not req.resolved
     db.session.commit()
-    return redirect(url_for('admin_orders', view='shortage'))
+    return redirect(url_for('admin_orders', view='shortage',
+                            sr_status='resolved' if req.resolved else 'pending'))
+
+
+@app.route('/admin/shortage_requests/<int:rid>/note', methods=['POST'])
+@login_required
+@editor_required
+def admin_shortage_note(rid):
+    req = ShortageRequest.query.get_or_404(rid)
+    req.handle_note = request.form.get('handle_note', '').strip() or None
+    db.session.commit()
+    flash('備註已儲存', 'success')
+    return redirect(url_for('admin_orders', view='shortage',
+                            sr_status='resolved' if req.resolved else 'pending'))
 
 
 @app.route('/basket/append', methods=['POST'])
@@ -1033,20 +1051,23 @@ def order_confirm(order_no):
 @login_required
 @editor_required
 def admin_orders():
-    view   = request.args.get('view', 'orders')
-    status = request.args.get('status', 'pending')
+    view      = request.args.get('view', 'orders')
+    status    = request.args.get('status', 'pending')
+    sr_status = request.args.get('sr_status', 'pending')
     pending_count = Order.query.filter_by(status='pending').count()
+    shortage_pending_count = ShortageRequest.query.filter_by(resolved=False).count()
     orders = []
     shortage_reqs = []
     if view == 'shortage':
-        shortage_reqs = ShortageRequest.query.order_by(
-            ShortageRequest.resolved, ShortageRequest.created_at.desc()).all()
+        shortage_reqs = ShortageRequest.query.filter_by(resolved=(sr_status == 'resolved'))\
+                                             .order_by(ShortageRequest.created_at.desc()).all()
     else:
         orders = Order.query.filter_by(status=status)\
                             .order_by(Order.created_at.desc()).all()
     return render_template('admin/orders.html', orders=orders, status=status,
                            pending_count=pending_count, view=view,
-                           shortage_reqs=shortage_reqs)
+                           shortage_reqs=shortage_reqs, sr_status=sr_status,
+                           shortage_pending_count=shortage_pending_count)
 
 
 @app.route('/admin/orders/<int:oid>')
@@ -1129,6 +1150,7 @@ def admin_order_confirm(oid):
     order.status       = 'confirmed'
     order.confirmed_at = now_tw()
     order.confirmed_by = current_user.id
+    order.admin_note   = request.form.get('admin_note', '').strip() or None
     db.session.commit()
     flash(f'申請單 {order.order_no} 已確認出貨，庫存已扣除', 'success')
     return redirect(url_for('admin_orders'))
@@ -1139,7 +1161,8 @@ def admin_order_confirm(oid):
 @editor_required
 def admin_order_cancel(oid):
     order = Order.query.get_or_404(oid)
-    order.status = 'cancelled'
+    order.status     = 'cancelled'
+    order.admin_note = request.form.get('admin_note', '').strip() or None
     db.session.commit()
     flash('申請單已取消', 'success')
     return redirect(url_for('admin_orders'))
@@ -1284,6 +1307,8 @@ with app.app_context():
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
                 "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS applicant VARCHAR(80)",
+                "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS admin_note VARCHAR(300)",
+                "ALTER TABLE shortage_requests ADD COLUMN IF NOT EXISTS handle_note VARCHAR(300)",
             ]:
                 try: conn.execute(text(sql)); conn.commit()
                 except Exception: conn.rollback()

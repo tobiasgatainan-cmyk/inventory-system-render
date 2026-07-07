@@ -25,17 +25,62 @@
 </style>
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-  <h1 style="font-size:20px;font-weight:700;color:#c0474d">📋 申請單管理</h1>
+  <h1 style="font-size:20px;font-weight:700;color:#c0474d">📋 申請單／缺貨回報</h1>
 </div>
 
+<div class="status-tabs" style="margin-bottom:16px">
+  <a href="{{ url_for('admin_orders', view='orders') }}"
+     class="stab {% if view=='orders' %}active{% endif %}">📋 申請單</a>
+  <a href="{{ url_for('admin_orders', view='shortage') }}"
+     class="stab {% if view=='shortage' %}active{% endif %}">📢 缺貨回報</a>
+</div>
+
+{% if view == 'shortage' %}
+
+<div class="card" style="padding:0;overflow:hidden">
+<table>
+  <thead>
+    <tr>
+      <th>回報時間</th><th>申請人</th><th>想要的品項</th><th>需求數量／說明</th><th>狀態</th><th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in shortage_reqs %}
+  <tr style="{% if r.resolved %}opacity:.5{% endif %}">
+    <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td style="font-weight:600">{{ r.applicant }}</td>
+    <td>{{ r.item_name }}</td>
+    <td style="font-size:13px;color:#666">{{ r.note or '—' }}</td>
+    <td>
+      {% if r.resolved %}<span style="color:#28a745;font-weight:600">已處理</span>
+      {% else %}<span style="color:#f0b87a;font-weight:600">待處理</span>{% endif %}
+    </td>
+    <td>
+      <form method="POST" action="{{ url_for('admin_toggle_shortage', rid=r.id) }}" style="display:inline">
+        <button type="submit" class="btn-sm" style="background:{% if r.resolved %}#f0f0f0{% else %}#e6f4ea{% endif %};
+          color:{% if r.resolved %}#666{% else %}#1e7e34{% endif %};border:1px solid #ddd">
+          {{ '標示為待處理' if r.resolved else '標示為已處理' }}
+        </button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">目前沒有回報紀錄</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% else %}
+
 <div class="status-tabs">
-  <a href="{{ url_for('admin_orders', status='pending') }}"
+  <a href="{{ url_for('admin_orders', view='orders', status='pending') }}"
      class="stab {% if status=='pending' %}active{% endif %}">
     待處理{% if pending_count %}<span class="pending-badge">{{ pending_count }}</span>{% endif %}
   </a>
-  <a href="{{ url_for('admin_orders', status='confirmed') }}"
+  <a href="{{ url_for('admin_orders', view='orders', status='confirmed') }}"
      class="stab {% if status=='confirmed' %}active{% endif %}">已出貨</a>
-  <a href="{{ url_for('admin_orders', status='cancelled') }}"
+  <a href="{{ url_for('admin_orders', view='orders', status='cancelled') }}"
      class="stab {% if status=='cancelled' %}active{% endif %}">已取消</a>
 </div>
 
@@ -76,6 +121,8 @@
   <div style="font-size:40px;margin-bottom:12px">📭</div>
   <div>目前沒有{% if status=='pending' %}待處理{% elif status=='confirmed' %}已出貨{% else %}已取消{% endif %}的申請單</div>
 </div>
+{% endif %}
+
 {% endif %}
 </div>
 {% endblock %}

@@ -880,8 +880,7 @@ def report_shortage():
 @login_required
 @editor_required
 def admin_shortage_requests():
-    reqs = ShortageRequest.query.order_by(ShortageRequest.resolved, ShortageRequest.created_at.desc()).all()
-    return render_template('admin/shortage_requests.html', reqs=reqs)
+    return redirect(url_for('admin_orders', view='shortage'))
 
 
 @app.route('/admin/shortage_requests/<int:rid>/toggle', methods=['POST'])
@@ -891,7 +890,7 @@ def admin_toggle_shortage(rid):
     req = ShortageRequest.query.get_or_404(rid)
     req.resolved = not req.resolved
     db.session.commit()
-    return redirect(url_for('admin_shortage_requests'))
+    return redirect(url_for('admin_orders', view='shortage'))
 
 
 @app.route('/basket/append', methods=['POST'])
@@ -1034,12 +1033,20 @@ def order_confirm(order_no):
 @login_required
 @editor_required
 def admin_orders():
-    status  = request.args.get('status', 'pending')
-    orders  = Order.query.filter_by(status=status)\
-                         .order_by(Order.created_at.desc()).all()
+    view   = request.args.get('view', 'orders')
+    status = request.args.get('status', 'pending')
     pending_count = Order.query.filter_by(status='pending').count()
-    return render_template('admin/orders.html', orders=orders,
-                           status=status, pending_count=pending_count)
+    orders = []
+    shortage_reqs = []
+    if view == 'shortage':
+        shortage_reqs = ShortageRequest.query.order_by(
+            ShortageRequest.resolved, ShortageRequest.created_at.desc()).all()
+    else:
+        orders = Order.query.filter_by(status=status)\
+                            .order_by(Order.created_at.desc()).all()
+    return render_template('admin/orders.html', orders=orders, status=status,
+                           pending_count=pending_count, view=view,
+                           shortage_reqs=shortage_reqs)
 
 
 @app.route('/admin/orders/<int:oid>')

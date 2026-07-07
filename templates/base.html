@@ -68,10 +68,9 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
     <a href="{{ url_for('index') }}" {% if request.endpoint=='index' %}class="active"{% endif %}>🏠 庫存</a>
     {% if current_user.is_authenticated %}
       {% if current_user.can_edit() %}
+      <a href="{{ url_for('admin_orders') }}" {% if 'order' in request.endpoint or 'shortage' in request.endpoint %}class="active"{% endif %}>📋 申請單／缺貨</a>
       <a href="{{ url_for('admin_items') }}" {% if 'items' in request.endpoint or 'item' in request.endpoint %}class="active"{% endif %}>✏️ 後台管理</a>
-      <a href="{{ url_for('admin_orders') }}" {% if 'order' in request.endpoint %}class="active"{% endif %}>📋 申請單</a>
       <a href="{{ url_for('admin_logs') }}"  {% if 'logs'  in request.endpoint %}class="active"{% endif %}>📋 異動紀錄</a>
-      <a href="{{ url_for('admin_shortage_requests') }}" {% if 'shortage' in request.endpoint %}class="active"{% endif %}>📢 缺貨回報</a>
       {% endif %}
       {% if current_user.is_admin() %}
       <a href="{{ url_for('admin_users') }}" {% if 'users' in request.endpoint %}class="active"{% endif %}>👥 使用者</a>

@@ -95,15 +95,15 @@
     <span class="search-icon">🔍</span>
     <input type="text" id="searchInput" placeholder="搜尋品項名稱或類別…" oninput="filterItems()">
   </div>
-  <div style="text-align:right;margin-bottom:10px">
-    <a href="javascript:void(0)" onclick="openShortageModal('')" style="font-size:12px;color:var(--text3);text-decoration:underline">
+  <div class="filter-tabs" style="justify-content:space-between">
+    <div style="display:flex;gap:2px">
+      <button class="ftab active" onclick="setTab('all',this)">全部</button>
+      <button class="ftab"        onclick="setTab('low',this)">⚠️ 低庫存</button>
+      <button class="ftab"        onclick="setTab('out',this)">✕ 缺貨</button>
+    </div>
+    <a href="javascript:void(0)" onclick="openShortageModal('')" style="font-size:12px;color:var(--text3);text-decoration:underline;align-self:center">
       找不到需要的品項？點此通知管理員
     </a>
-  </div>
-  <div class="filter-tabs">
-    <button class="ftab active" onclick="setTab('all',this)">全部</button>
-    <button class="ftab"        onclick="setTab('low',this)">⚠️ 低庫存</button>
-    <button class="ftab"        onclick="setTab('out',this)">✕ 缺貨</button>
   </div>
 </div>
 
@@ -283,8 +283,8 @@ function filterItems(){
                style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;box-sizing:border-box">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:4px">說明（選填）</label>
-        <input type="text" id="shortageNote" placeholder="用途、急迫程度等"
+        <label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:4px">需求數量／說明（選填）</label>
+        <input type="text" id="shortageNote" placeholder="數量／說明"
                style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;box-sizing:border-box">
       </div>
       <div>

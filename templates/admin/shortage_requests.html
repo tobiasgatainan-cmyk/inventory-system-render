@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}美善基金會庫存系統{% endblock %}
+{% block content %}
+<div class="container">
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <h1 style="font-size:20px;color:#c0474d">📢 缺貨／品項需求回報</h1>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+<table>
+  <thead>
+    <tr>
+      <th>回報時間</th><th>申請人</th><th>想要的品項</th><th>說明</th><th>狀態</th><th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in reqs %}
+  <tr style="{% if r.resolved %}opacity:.5{% endif %}">
+    <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td style="font-weight:600">{{ r.applicant }}</td>
+    <td>{{ r.item_name }}</td>
+    <td style="font-size:13px;color:#666">{{ r.note or '—' }}</td>
+    <td>
+      {% if r.resolved %}<span style="color:#28a745;font-weight:600">已處理</span>
+      {% else %}<span style="color:#f0b87a;font-weight:600">待處理</span>{% endif %}
+    </td>
+    <td>
+      <form method="POST" action="{{ url_for('admin_toggle_shortage', rid=r.id) }}" style="display:inline">
+        <button type="submit" class="btn btn-sm" style="background:{% if r.resolved %}#f0f0f0{% else %}#e6f4ea{% endif %};
+          color:{% if r.resolved %}#666{% else %}#1e7e34{% endif %};border:1px solid #ddd">
+          {{ '標示為待處理' if r.resolved else '標示為已處理' }}
+        </button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">目前沒有回報紀錄</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+</div>
+{% endblock %}

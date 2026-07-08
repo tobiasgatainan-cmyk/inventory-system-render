@@ -741,9 +741,10 @@ def stock_in():
     db.session.add(log); db.session.commit()
 
     try:
-        from gsheet import append_log_row, append_purchase_record
+        from gsheet import append_log_row, append_purchase_record, full_sync
         append_log_row(batch, qty, reason, current_user.username)
         append_purchase_record(batch, current_user.username)
+        full_sync()
     except Exception: pass
     return redirect(request.referrer or url_for('admin_items'))
 
@@ -772,8 +773,9 @@ def stock_out():
     db.session.add(log); db.session.commit()
 
     try:
-        from gsheet import append_log_row
+        from gsheet import append_log_row, full_sync
         append_log_row(batch, -qty, reason, current_user.username, applicant=applicant)
+        full_sync()
     except Exception: pass
 
     flash(f'出庫成功（-{qty}）', 'success')
@@ -885,6 +887,11 @@ def report_shortage():
         send_shortage_notify(req)
     except Exception as e:
         app.logger.warning(f'send_shortage_notify failed: {e}')
+    try:
+        from gsheet import sync_shortage
+        sync_shortage(req)
+    except Exception as e:
+        app.logger.warning(f'sync_shortage failed: {e}')
 
     return jsonify({'ok': True})
 
@@ -906,6 +913,11 @@ def admin_toggle_shortage(rid):
         req.handle_note = note
     req.resolved = not req.resolved
     db.session.commit()
+    try:
+        from gsheet import sync_shortage
+        sync_shortage(req)
+    except Exception as e:
+        app.logger.warning(f'sync_shortage failed: {e}')
     return redirect(url_for('admin_orders', view='shortage',
                             sr_status='resolved' if req.resolved else 'pending'))
 
@@ -918,6 +930,11 @@ def admin_shortage_note(rid):
     req.handle_note = request.form.get('handle_note', '').strip() or None
     db.session.commit()
     flash('備註已儲存', 'success')
+    try:
+        from gsheet import sync_shortage
+        sync_shortage(req)
+    except Exception as e:
+        app.logger.warning(f'sync_shortage failed: {e}')
     return redirect(url_for('admin_orders', view='shortage',
                             sr_status='resolved' if req.resolved else 'pending'))
 
@@ -1053,6 +1070,12 @@ def order_submit():
         from notify import send_order_notify
         send_order_notify(order)
     except Exception: pass
+
+    try:
+        from gsheet import sync_order
+        sync_order(order)
+    except Exception as e:
+        app.logger.warning(f'sync_order failed: {e}')
 
     return redirect(url_for('order_confirm', order_no=order_no))
 
@@ -1207,6 +1230,12 @@ def admin_order_confirm(oid):
     order.admin_note   = request.form.get('admin_note', '').strip() or None
     db.session.commit()
     flash(f'申請單 {order.order_no} 已確認出貨，庫存已扣除', 'success')
+    try:
+        from gsheet import sync_order, full_sync
+        sync_order(order)
+        full_sync()
+    except Exception as e:
+        app.logger.warning(f'gsheet sync failed: {e}')
     return redirect(url_for('admin_orders'))
 
 
@@ -1215,10 +1244,16 @@ def admin_order_confirm(oid):
 @editor_required
 def admin_order_cancel(oid):
     order = Order.query.get_or_404(oid)
-    order.status     = 'cancelled'
-    order.admin_note = request.form.get('admin_note', '').strip() or None
+    order.status       = 'cancelled'
+    order.admin_note   = request.form.get('admin_note', '').strip() or None
+    order.confirmed_at = now_tw()
     db.session.commit()
     flash('申請單已取消', 'success')
+    try:
+        from gsheet import sync_order
+        sync_order(order)
+    except Exception as e:
+        app.logger.warning(f'sync_order failed: {e}')
     return redirect(url_for('admin_orders'))
 
 

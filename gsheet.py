@@ -23,6 +23,73 @@ def _sheet(tab):
     try: return sh.worksheet(tab)
     except gspread.WorksheetNotFound: return sh.add_worksheet(title=tab, rows=2000, cols=20)
 
+def _find_row(ws, key_value, key_col=1):
+    """在該工作表第 key_col 欄（1-based）尋找等於 key_value 的列，回傳列號；找不到回傳 None"""
+    try:
+        col_values = ws.col_values(key_col)
+    except Exception:
+        return None
+    for i, v in enumerate(col_values, start=1):
+        if str(v) == str(key_value):
+            return i
+    return None
+
+def _ensure_headers(ws, headers):
+    try:
+        first_row = ws.row_values(1)
+    except Exception:
+        first_row = []
+    if first_row != headers:
+        ws.clear()
+        ws.append_row(headers)
+
+
+# ── Order sync（找到就覆蓋原本那一列，找不到才新增）────────
+def sync_order(order):
+    ws = _sheet('申請單')
+    HEADERS = ['申請單號','申請人','狀態','品項摘要','申請人備註','管理員備註','申請時間','處理時間']
+    _ensure_headers(ws, HEADERS)
+
+    status_map = {'pending': '待處理', 'confirmed': '已出貨', 'cancelled': '已取消'}
+    items_summary = '／'.join(f'{oi.item_name}×{oi.qty_request}' for oi in order.items)
+    row = [
+        order.order_no,
+        order.applicant,
+        status_map.get(order.status, order.status),
+        items_summary,
+        order.note or '',
+        order.admin_note or '',
+        order.created_at.strftime('%Y-%m-%d %H:%M'),
+        order.confirmed_at.strftime('%Y-%m-%d %H:%M') if order.confirmed_at else '',
+    ]
+    row_num = _find_row(ws, order.order_no, key_col=1)
+    if row_num:
+        ws.update(f'A{row_num}', [row])
+    else:
+        ws.append_row(row)
+
+
+# ── Shortage request sync（同上，用回報編號當 key）──────────
+def sync_shortage(req):
+    ws = _sheet('缺貨回報')
+    HEADERS = ['編號','品項名稱','申請人','需求說明','狀態','處理備註','回報時間']
+    _ensure_headers(ws, HEADERS)
+
+    row = [
+        req.id,
+        req.item_name,
+        req.applicant,
+        req.note or '',
+        '已處理' if req.resolved else '待處理',
+        req.handle_note or '',
+        req.created_at.strftime('%Y-%m-%d %H:%M'),
+    ]
+    row_num = _find_row(ws, req.id, key_col=1)
+    if row_num:
+        ws.update(f'A{row_num}', [row])
+    else:
+        ws.append_row(row)
+
 
 # ── Full sync ─────────────────────────────────────────────
 def _display_rows_for_item(item):

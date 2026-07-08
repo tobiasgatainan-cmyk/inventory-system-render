@@ -6,6 +6,12 @@
 #main-container{max-width:100%;padding:0;margin:0}
 :root{--bg:#fdf6f0;--surface:#fff;--surface2:#f7ecdf;--border:#edddd0;--border2:#e0c8b8;--text:#2a1f1a;--text2:#6b5a52;--text3:#a8958c;--accent:#fe7b81;--accent-light:#fff0f1;--accent-dark:#e55e65;--ok:#4a9e6b;--ok-light:#edf7f1;--out:#d94f55;--out-light:#fdf0f0;--low:#d97b2a;--low-light:#fef3e8;--radius:8px;--radius-lg:14px;--mono:'JetBrains Mono',monospace}
 .admin-layout{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 54px)}
+
+@media(max-width:640px){
+  .admin-layout{grid-template-columns:1fr}
+  .adm-sidebar{border-right:none;border-bottom:1px solid var(--border);padding:16px}
+  .adm-main{padding:12px}
+}
 .adm-sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 20px 20px 24px;overflow-y:auto}
 .sb-section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);margin-bottom:10px;margin-top:20px}
 .sb-section:first-child{margin-top:0}

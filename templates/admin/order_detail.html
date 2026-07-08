@@ -100,17 +100,18 @@
     <div class="adj-row">
       <div>
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">實際出貨數量</label>
-        <input type="number" name="qty_{{ oi.id }}" value="{{ oi.qty_actual or oi.qty_request }}"
+        <input type="number" name="qty_{{ oi.id }}" id="qty-{{ oi.id }}" value="{{ oi.qty_actual or oi.qty_request }}"
                min="0" max="{{ oi.batch.qty }}" class="fi" style="width:80px">
       </div>
       <div style="flex:1">
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">
           出貨批次 <span style="font-weight:400">（可換成更近到期的批次）</span>
         </label>
-        <select name="batch_{{ oi.id }}" class="fi" style="width:100%;max-width:380px">
+        <select name="batch_{{ oi.id }}" id="batchSelect-{{ oi.id }}" class="fi" style="width:100%;max-width:380px"
+                onchange="onPrimaryBatchChange({{ oi.id }})">
           {% for b in oi._available_batches %}
           {% set days = (b.expiry_date - today).days if b.expiry_date else None %}
-          <option value="{{ b.id }}" {% if b.id == oi.batch_id %}selected{% endif %}>
+          <option value="{{ b.id }}" data-qty="{{ b.qty }}" {% if b.id == oi.batch_id %}selected{% endif %}>
             {{ b.spec.brand.name }}／{{ b.spec.name }}／到期：{% if b.expiry_date %}{{ b.expiry_date.isoformat() }}{% if days is not none %}（{% if days < 0 %}已過期{% elif days == 0 %}今天{% else %}{{ days }}天{% endif %}）{% endif %}{% else %}無{% endif %}／庫存 {{ b.qty }}
           </option>
           {% endfor %}
@@ -134,20 +135,63 @@
       row.className = 'adj-row';
       row.style.marginTop = '6px';
       const optionsHtml = '<option value="">— 選擇批次 —</option>' + opts.map(o =>
-        `<option value="${o.id}" ${presetBatchId==o.id?'selected':''}>${o.label}</option>`).join('');
+        `<option value="${o.id}" data-qty="${o.qty}" ${presetBatchId==o.id?'selected':''}>${o.label}</option>`).join('');
       row.innerHTML = `
         <div>
           <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">補足數量</label>
-          <input type="number" name="split_qty_${oiId}[]" value="${presetQty||0}" min="0" class="fi" style="width:80px">
+          <input type="number" name="split_qty_${oiId}[]" value="${presetQty||0}" min="0" class="fi split-qty-input" style="width:80px">
         </div>
         <div style="flex:1">
           <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">補足批次</label>
-          <select name="split_batch_${oiId}[]" class="fi" style="width:100%;max-width:340px">${optionsHtml}</select>
+          <select name="split_batch_${oiId}[]" class="fi split-batch-select" style="width:100%;max-width:340px" onchange="onSplitBatchChange(this);refreshBatchOptions(${oiId})">${optionsHtml}</select>
         </div>
-        <button type="button" onclick="this.closest('.adj-row').remove()"
+        <button type="button" onclick="removeSplitRow(this, ${oiId})"
                 style="align-self:flex-end;padding:7px 10px;border:1px solid #ddd;background:white;border-radius:7px;cursor:pointer;color:#c0474d">✕</button>
       `;
       container.appendChild(row);
+      const select = row.querySelector('.split-batch-select');
+      const qtyInput = row.querySelector('.split-qty-input');
+      onSplitBatchChange(select);
+      qtyInput.oninput = () => {
+        const max = parseInt(qtyInput.max || 0);
+        if(max && qtyInput.value > max) qtyInput.value = max;
+      };
+      refreshBatchOptions(oiId);
+    }
+    function onSplitBatchChange(select){
+      const row = select.closest('.adj-row');
+      const qtyInput = row.querySelector('.split-qty-input');
+      const opt = select.selectedOptions[0];
+      const max = opt ? parseInt(opt.dataset.qty || 0) : 0;
+      qtyInput.max = max;
+      if(max && parseInt(qtyInput.value) > max) qtyInput.value = max;
+      if(!select.value) qtyInput.value = 0;
+    }
+    function onPrimaryBatchChange(oiId){
+      const select = document.getElementById('batchSelect-'+oiId);
+      const qtyInput = document.getElementById('qty-'+oiId);
+      const opt = select.selectedOptions[0];
+      const max = opt ? parseInt(opt.dataset.qty || 0) : 0;
+      qtyInput.max = max;
+      if(max && parseInt(qtyInput.value) > max) qtyInput.value = max;
+      refreshBatchOptions(oiId);
+    }
+    function removeSplitRow(btn, oiId){
+      btn.closest('.adj-row').remove();
+      refreshBatchOptions(oiId);
+    }
+    function refreshBatchOptions(oiId){
+      // 同一個品項底下（主批次＋所有補足批次），不能重複選同一筆批次
+      const primarySelect = document.getElementById('batchSelect-'+oiId);
+      const splitSelects  = Array.from(document.querySelectorAll(`select[name="split_batch_${oiId}[]"]`));
+      const allSelects = primarySelect ? [primarySelect, ...splitSelects] : splitSelects;
+      const chosen = allSelects.map(s => s.value).filter(v => v);
+      allSelects.forEach(s => {
+        Array.from(s.options).forEach(opt => {
+          if(!opt.value) return;
+          opt.disabled = chosen.includes(opt.value) && opt.value !== s.value;
+        });
+      });
     }
     {% for s in oi.splits %}
     addSplitRow({{ oi.id }}, {{ s.batch_id }}, {{ s.qty }});

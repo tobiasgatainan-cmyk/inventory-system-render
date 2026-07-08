@@ -117,9 +117,37 @@
         </select>
       </div>
     </div>
+    <div style="margin-top:8px">
+      <a href="javascript:void(0)" onclick="toggleSplit({{ oi.id }})" id="splitToggle-{{ oi.id }}"
+         style="font-size:12px;color:var(--accent);text-decoration:underline">
+        {% if oi.split_qty %}✕ 取消補足批次{% else %}＋ 單一批次不夠？從其他批次補足差額{% endif %}
+      </a>
+      <div id="splitRow-{{ oi.id }}" class="adj-row" style="margin-top:8px;{% if not oi.split_qty %}display:none{% endif %}">
+        <div>
+          <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">補足數量</label>
+          <input type="number" name="split_qty_{{ oi.id }}" value="{{ oi.split_qty or 0 }}"
+                 min="0" class="fi" style="width:80px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">補足批次</label>
+          <select name="split_batch_{{ oi.id }}" class="fi" style="width:100%;max-width:380px">
+            <option value="">— 選擇批次 —</option>
+            {% for b in oi._available_batches %}
+            {% set days = (b.expiry_date - today).days if b.expiry_date else None %}
+            <option value="{{ b.id }}" {% if b.id == oi.split_batch_id %}selected{% endif %}>
+              {{ b.spec.brand.name }}／{{ b.spec.name }}／到期：{% if b.expiry_date %}{{ b.expiry_date.isoformat() }}{% if days is not none %}（{% if days < 0 %}已過期{% elif days == 0 %}今天{% else %}{{ days }}天{% endif %}）{% endif %}{% else %}無{% endif %}／庫存 {{ b.qty }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
     {% else %}
     <div style="font-size:12px;color:#a8958c">
       實際出貨：<strong style="color:#333">{{ oi.qty_actual or oi.qty_request }}</strong>
+      {% if oi.split_qty %}
+      <span style="color:#a8958c">（主批次 {{ (oi.qty_actual or oi.qty_request) }} ＋ 補足批次 {{ oi.split_qty }}）</span>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -162,4 +190,17 @@
 {% endif %}
 
 </div>
+<script>
+function toggleSplit(oiId){
+  const row = document.getElementById('splitRow-'+oiId);
+  const link = document.getElementById('splitToggle-'+oiId);
+  const showing = row.style.display !== 'none';
+  row.style.display = showing ? 'none' : 'flex';
+  link.textContent = showing ? '＋ 單一批次不夠？從其他批次補足差額' : '✕ 取消補足批次';
+  if(showing){
+    row.querySelector('input[type=number]').value = 0;
+    row.querySelector('select').value = '';
+  }
+}
+</script>
 {% endblock %}

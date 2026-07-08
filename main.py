@@ -222,7 +222,7 @@ class OrderItem(db.Model):
     batch_id    = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=False)
     qty_request = db.Column(db.Integer, nullable=False)   # 申請數量
     qty_actual  = db.Column(db.Integer, nullable=True)    # 實際出貨數量（後台可調整）
-    batch       = db.relationship('Batch', backref='order_items')
+    batch       = db.relationship('Batch', foreign_keys=[batch_id], backref='order_items')
 
     # 若單一批次庫存不足，可從另一個批次補足差額
     split_batch_id = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=True)

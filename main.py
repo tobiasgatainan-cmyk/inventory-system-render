@@ -224,6 +224,11 @@ class OrderItem(db.Model):
     qty_actual  = db.Column(db.Integer, nullable=True)    # 實際出貨數量（後台可調整）
     batch       = db.relationship('Batch', backref='order_items')
 
+    # 若單一批次庫存不足，可從另一個批次補足差額
+    split_batch_id = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=True)
+    split_qty      = db.Column(db.Integer, nullable=True)
+    split_batch    = db.relationship('Batch', foreign_keys=[split_batch_id])
+
     @property
     def item_name(self):
         return self.batch.spec.brand.item.name if self.batch else '—'
@@ -982,6 +987,12 @@ def cart_update():
     batch_id = data.get('batch_id')
     qty      = int(data.get('qty', 0))
     cart     = session.get('cart', [])
+
+    batch = Batch.query.get(batch_id)
+    max_qty = batch.available_qty if batch else 0
+    if qty > max_qty:
+        qty = max_qty
+
     if qty <= 0:
         cart = [e for e in cart if e['batch_id'] != batch_id]
     else:
@@ -990,7 +1001,7 @@ def cart_update():
                 entry['qty'] = qty
     session['cart'] = cart
     session.modified = True
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'qty': qty, 'max': max_qty})
 
 
 @app.route('/cart/clear', methods=['POST'])
@@ -1105,10 +1116,20 @@ def admin_order_update(oid):
     for oi in order.items:
         qty_key   = f'qty_{oi.id}'
         batch_key = f'batch_{oi.id}'
+        split_qty_key   = f'split_qty_{oi.id}'
+        split_batch_key = f'split_batch_{oi.id}'
         if qty_key in request.form:
             oi.qty_actual = int(request.form[qty_key] or 0)
         if batch_key in request.form:
             oi.batch_id = int(request.form[batch_key])
+        split_qty = int(request.form.get(split_qty_key) or 0)
+        split_batch = request.form.get(split_batch_key) or ''
+        if split_qty > 0 and split_batch:
+            oi.split_qty      = split_qty
+            oi.split_batch_id = int(split_batch)
+        else:
+            oi.split_qty      = None
+            oi.split_batch_id = None
     db.session.commit()
     flash('申請單已更新', 'success')
     return redirect(url_for('admin_order_detail', oid=oid))
@@ -1123,21 +1144,20 @@ def admin_order_confirm(oid):
         flash('此申請單已處理', 'danger')
         return redirect(url_for('admin_orders'))
 
-    for oi in order.items:
-        qty = oi.qty_actual or 0
-        if qty <= 0: continue
-        batch = Batch.query.get(oi.batch_id)
-        if not batch: continue
+    order_reason = f'申請單 {order.order_no}' + (f'／{order.note}' if order.note else '')
+
+    def deduct(item_name, batch_id, qty):
+        """扣單一批次庫存並記錄異動,回傳錯誤訊息（無錯誤則為 None）"""
+        if qty <= 0: return None
+        batch = Batch.query.get(batch_id)
+        if not batch: return None
         if qty > batch.qty:
-            flash(f'{oi.item_name} 庫存不足（現有 {batch.qty}，申請 {qty}）', 'danger')
-            return redirect(url_for('admin_order_detail', oid=oid))
+            return f'{item_name} 庫存不足（現有 {batch.qty}，需求 {qty}）'
         batch.qty -= qty
-        # 問題7：歸零後保留一列空白批次（清空到期日/進價/備註）
         if batch.qty == 0:
             batch.expiry_date = None
             batch.cost_price  = None
             batch.note        = None
-        order_reason = f'申請單 {order.order_no}' + (f'／{order.note}' if order.note else '')
         log = StockLog(batch_id=batch.id, change=-qty,
                        applicant=order.applicant, reason=order_reason,
                        user_id=current_user.id)
@@ -1146,6 +1166,18 @@ def admin_order_confirm(oid):
             from gsheet import append_log_row
             append_log_row(batch, -qty, order_reason, current_user.username, applicant=order.applicant)
         except Exception: pass
+        return None
+
+    for oi in order.items:
+        err = deduct(oi.item_name, oi.batch_id, oi.qty_actual or 0)
+        if err:
+            flash(err, 'danger')
+            return redirect(url_for('admin_order_detail', oid=oid))
+        if oi.split_qty and oi.split_batch_id:
+            err = deduct(oi.item_name, oi.split_batch_id, oi.split_qty)
+            if err:
+                flash(err, 'danger')
+                return redirect(url_for('admin_order_detail', oid=oid))
 
     order.status       = 'confirmed'
     order.confirmed_at = now_tw()
@@ -1308,6 +1340,8 @@ with app.app_context():
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
                 "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS applicant VARCHAR(80)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS admin_note VARCHAR(300)",
+                "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS split_batch_id INTEGER",
+                "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS split_qty INTEGER",
                 "ALTER TABLE shortage_requests ADD COLUMN IF NOT EXISTS handle_note VARCHAR(300)",
             ]:
                 try: conn.execute(text(sql)); conn.commit()

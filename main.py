@@ -1122,6 +1122,7 @@ def admin_order_detail(oid):
                 exp_label = '無'
             oi._batch_options.append({
                 'id': b.id,
+                'qty': b.qty,
                 'label': f'{b.spec.brand.name}／{b.spec.name}／到期：{exp_label}／庫存 {b.qty}',
             })
     return render_template('admin/order_detail.html', order=order, today=today)

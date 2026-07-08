@@ -17,6 +17,18 @@ body{font-family:'Noto Sans TC',sans-serif;background:#fdf6f0;color:#333;min-hei
 .nav-links a:hover,.nav-links a.active{background:rgba(255,255,255,.25)}
 .nav-user{font-size:12px;opacity:.85;margin-left:12px;border-left:1px solid rgba(255,255,255,.4);padding-left:12px}
 .badge{background:rgba(255,255,255,.3);border-radius:10px;padding:2px 7px;font-size:11px;margin-left:4px}
+.brand-short{display:none}
+
+@media(max-width:640px){
+  .nav{padding:0 10px;flex-wrap:nowrap}
+  .nav-brand{font-size:13px;white-space:nowrap;flex-shrink:0}
+  .brand-full{display:none}
+  .brand-short{display:inline}
+  .nav-links{overflow-x:auto;white-space:nowrap;gap:2px;-webkit-overflow-scrolling:touch;flex-shrink:1;scrollbar-width:none}
+  .nav-links::-webkit-scrollbar{display:none}
+  .nav-links a{padding:5px 8px;font-size:12px;white-space:nowrap;flex-shrink:0}
+  .nav-user{font-size:11px;margin-left:6px;padding-left:6px;white-space:nowrap;flex-shrink:0}
+}
 
 /* ── Layout ── */
 .container{max-width:1200px;margin:0 auto;padding:24px 20px}
@@ -63,7 +75,10 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
 <body>
 
 <nav class="nav">
-  <a href="{{ url_for('index') }}" style="color:white;text-decoration:none" class="nav-brand">📦 美善基金會庫存管理</a>
+  <a href="{{ url_for('index') }}" style="color:white;text-decoration:none" class="nav-brand">
+    <span class="brand-full">📦 美善基金會庫存管理</span>
+    <span class="brand-short">📦 美善基金會</span>
+  </a>
   <div class="nav-links">
     <a href="{{ url_for('index') }}" {% if request.endpoint=='index' %}class="active"{% endif %}>🏠 庫存</a>
     {% if current_user.is_authenticated %}

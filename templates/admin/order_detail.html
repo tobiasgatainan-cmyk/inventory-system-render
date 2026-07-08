@@ -101,7 +101,8 @@
       <div>
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">實際出貨數量</label>
         <input type="number" name="qty_{{ oi.id }}" id="qty-{{ oi.id }}" value="{{ oi.qty_actual or oi.qty_request }}"
-               min="0" max="{{ oi.batch.qty }}" class="fi" style="width:80px">
+               min="0" max="{{ oi.batch.qty }}" class="fi" style="width:80px"
+               oninput="if(this.max && parseInt(this.value)>parseInt(this.max)) this.value=this.max;">
       </div>
       <div style="flex:1">
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">

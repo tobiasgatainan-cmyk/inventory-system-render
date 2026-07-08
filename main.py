@@ -232,6 +232,14 @@ class OrderItem(db.Model):
     def brand_name(self):
         return self.batch.spec.brand.name if self.batch else '—'
 
+    @property
+    def spec_name(self):
+        return self.batch.spec.name if self.batch else '—'
+
+    @property
+    def expiry_str(self):
+        return self.batch.expiry_date.isoformat() if self.batch and self.batch.expiry_date else '—'
+
 
 class OrderItemSplit(db.Model):
     """單一批次庫存不夠時，可從多個批次補足差額，一個申請品項可以有多筆補足批次"""
@@ -242,14 +250,6 @@ class OrderItemSplit(db.Model):
     qty           = db.Column(db.Integer, nullable=False)
     order_item    = db.relationship('OrderItem', backref=db.backref('splits', cascade='all, delete-orphan'))
     batch         = db.relationship('Batch', foreign_keys=[batch_id])
-
-    @property
-    def spec_name(self):
-        return self.batch.spec.name if self.batch else '—'
-
-    @property
-    def expiry_str(self):
-        return self.batch.expiry_date.isoformat() if self.batch and self.batch.expiry_date else '—'
 
 
 # ── Helpers ───────────────────────────────────────────────
@@ -1095,6 +1095,10 @@ def admin_order_detail(oid):
     today  = now_tw().date()
     # 取得每個品項可選的批次清單
     for oi in order.items:
+        if not oi.batch:
+            oi._available_batches = []
+            oi._batch_options = []
+            continue
         item = oi.batch.spec.brand.item
         # 找同品項下所有批次（依到期日排序）
         batches = []

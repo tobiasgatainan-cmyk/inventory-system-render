@@ -50,7 +50,8 @@ input[type=text]:focus,textarea:focus{border-color:#fe7b81}
       </td>
       <td style="color:#a8958c">{{ row.available }}</td>
       <td>
-        <input type="number" class="qty-input" value="{{ row.qty }}" min="1" max="{{ row.available }}"
+        <input type="number" id="qty-{{ row.batch_id }}" class="qty-input" value="{{ row.qty }}" min="1" max="{{ row.available }}"
+               oninput="if(this.value>{{ row.available }}) this.value={{ row.available }};"
                onchange="updateQty({{ row.batch_id }}, this.value)">
       </td>
       <td>
@@ -92,8 +93,14 @@ input[type=text]:focus,textarea:focus{border-color:#fe7b81}
 
 <script>
 async function updateQty(batchId, qty){
-  await fetch('/cart/update',{method:'POST',headers:{'Content-Type':'application/json'},
+  const r = await fetch('/cart/update',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({batch_id:batchId,qty:parseInt(qty)})});
+  const data = await r.json();
+  if(data.ok && data.qty !== parseInt(qty)){
+    const input = document.getElementById('qty-'+batchId);
+    if(input) input.value = data.qty;
+    alert(`目前庫存不足，數量已自動調整為 ${data.qty}`);
+  }
 }
 async function removeItem(batchId){
   await fetch('/cart/update',{method:'POST',headers:{'Content-Type':'application/json'},

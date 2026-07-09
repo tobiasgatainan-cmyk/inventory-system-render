@@ -101,15 +101,11 @@
 .filterable{position:relative;white-space:nowrap}
 .ffbtn{background:none;border:none;cursor:pointer;font-size:11px;color:#c0474d;padding:0 2px;vertical-align:middle}
 th.filter-active .ffbtn{color:#fe7b81;font-weight:900}
-.fpanel{display:none;position:absolute;top:100%;left:0;background:white;border:1px solid #ddd;border-radius:6px;
-  box-shadow:0 4px 14px rgba(0,0,0,.12);padding:8px;z-index:50;max-height:260px;overflow-y:auto;min-width:150px;
+.fpanel{display:none;position:fixed;background:white;border:1px solid #ddd;border-radius:6px;
+  box-shadow:0 4px 14px rgba(0,0,0,.12);padding:8px;z-index:500;max-height:260px;overflow-y:auto;min-width:150px;
   font-weight:400;text-align:left;text-transform:none}
 .fpanel.open{display:block}
 .fpanel label{display:block;padding:3px 2px;font-size:12px;white-space:nowrap;cursor:pointer}
-.fp-opt{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px;white-space:nowrap}
-.fp-opt input[type=checkbox]{flex-shrink:0}
-.fp-only{cursor:pointer;flex:1}
-.fp-only:hover{color:#fe7b81;text-decoration:underline}
 .fpanel .fp-actions{display:flex;gap:6px;margin-bottom:6px}
 .fpanel .fp-actions button{font-size:11px;padding:3px 8px;border:1px solid #ddd;background:#fafafa;border-radius:4px;cursor:pointer}
 </style>
@@ -153,11 +149,7 @@ function buildFilterPanel(col){
   </div>`;
   sorted.forEach(v=>{
     const checked = !uncheckedValues[col].has(v);
-    const safeV = v.replace(/'/g,"\\'");
-    html += `<div class="fp-opt">
-      <input type="checkbox" ${checked?'checked':''} value="${v}" onchange="onFilterCheck('${col}',this)">
-      <span class="fp-only" title="只看這一項" onclick="isolateValue('${col}','${safeV}')">${v}</span>
-    </div>`;
+    html += `<label><input type="checkbox" ${checked?'checked':''} value="${v}" onchange="onFilterCheck('${col}',this)"> ${v}</label>`;
   });
   panel.innerHTML = html || '<div style="font-size:12px;color:#aaa;padding:4px 2px">（無可選項目）</div>';
 }
@@ -178,21 +170,22 @@ function setAllCol(col, checked){
   applyFilters();
   FILTER_COLS.forEach(c => { if(c !== col) buildFilterPanel(c); });
 }
-function isolateValue(col, value){
-  // 點選項文字：只看這一項，其餘同欄位選項自動取消勾選
-  document.querySelectorAll(`#fpanel-${col} input[type=checkbox]`).forEach(cb=>{
-    if(cb.value === value){ cb.checked = true; uncheckedValues[col].delete(cb.value); }
-    else { cb.checked = false; uncheckedValues[col].add(cb.value); }
-  });
-  applyFilters();
-  FILTER_COLS.forEach(c => { if(c !== col) buildFilterPanel(c); });
-}
 function toggleFilterPanel(e, col){
   e.stopPropagation();
   document.querySelectorAll('.fpanel').forEach(p=>{ if(p.id !== 'fpanel-'+col) p.classList.remove('open'); });
   const panel = document.getElementById('fpanel-'+col);
   const opening = !panel.classList.contains('open');
-  if(opening) buildFilterPanel(col);
+  if(opening){
+    buildFilterPanel(col);
+    const rect = e.currentTarget.getBoundingClientRect();
+    panel.style.top  = rect.bottom + 4 + 'px';
+    panel.style.left = rect.left + 'px';
+    // 避免超出畫面右側
+    requestAnimationFrame(()=>{
+      const overflowX = panel.getBoundingClientRect().right - window.innerWidth;
+      if(overflowX > 0) panel.style.left = (rect.left - overflowX - 8) + 'px';
+    });
+  }
   panel.classList.toggle('open');
 }
 document.addEventListener('click', ()=>{

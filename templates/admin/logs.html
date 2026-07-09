@@ -5,9 +5,19 @@
 
 <h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">📋 庫存異動紀錄（最近 200 筆）</h1>
 
-<div style="margin-bottom:14px">
+<div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
   <input type="text" id="logSearch" placeholder="🔍 搜尋原因…" oninput="onSearchInput()"
-         style="width:100%;max-width:320px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+         style="flex:1;min-width:200px;max-width:320px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+  <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#666">
+    <span>時間</span>
+    <input type="date" id="logDateFrom" onchange="onSearchInput()"
+           style="padding:7px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+    <span>～</span>
+    <input type="date" id="logDateTo" onchange="onSearchInput()"
+           style="padding:7px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+    <button type="button" onclick="document.getElementById('logDateFrom').value='';document.getElementById('logDateTo').value='';onSearchInput()"
+            style="font-size:12px;padding:6px 10px;border:1px solid #ddd;background:#fafafa;border-radius:8px;cursor:pointer;color:#888">清除日期</button>
+  </div>
 </div>
 
 <div class="card" style="padding:0;overflow-x:auto">
@@ -60,7 +70,7 @@
   {% set type_label = '入庫' if log.change > 0 else '出庫' %}
   <tr data-cat="{{ cat_name }}" data-item="{{ item_name }}" data-brand="{{ brand_name }}" data-spec="{{ spec_name }}"
       data-type="{{ type_label }}" data-applicant="{{ applicant_name }}" data-user="{{ user_name }}"
-      data-search="{{ (log.reason or '')|lower }}"
+      data-search="{{ (log.reason or '')|lower }}" data-date="{{ log.created_at.strftime('%Y-%m-%d') }}"
       style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(254,123,129,.06){% endif %}">
     <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
     <td style="font-size:12px">{{ cat_name }}</td>
@@ -96,6 +106,10 @@ th.filter-active .ffbtn{color:#fe7b81;font-weight:900}
   font-weight:400;text-align:left;text-transform:none}
 .fpanel.open{display:block}
 .fpanel label{display:block;padding:3px 2px;font-size:12px;white-space:nowrap;cursor:pointer}
+.fp-opt{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px;white-space:nowrap}
+.fp-opt input[type=checkbox]{flex-shrink:0}
+.fp-only{cursor:pointer;flex:1}
+.fp-only:hover{color:#fe7b81;text-decoration:underline}
 .fpanel .fp-actions{display:flex;gap:6px;margin-bottom:6px}
 .fpanel .fp-actions button{font-size:11px;padding:3px 8px;border:1px solid #ddd;background:#fafafa;border-radius:4px;cursor:pointer}
 </style>
@@ -105,9 +119,19 @@ const FILTER_COLS = ['cat','item','brand','spec','type','applicant','user'];
 const uncheckedValues = {};
 FILTER_COLS.forEach(c => uncheckedValues[c] = new Set());
 
+function dateInRange(tr){
+  const from = document.getElementById('logDateFrom').value;
+  const to   = document.getElementById('logDateTo').value;
+  const d = tr.dataset.date;
+  if(from && d < from) return false;
+  if(to && d > to) return false;
+  return true;
+}
+
 function rowPassesOtherFilters(tr, exceptCol){
   const q = document.getElementById('logSearch').value.toLowerCase();
   if(q && !tr.dataset.search.includes(q)) return false;
+  if(!dateInRange(tr)) return false;
   for(const col of FILTER_COLS){
     if(col === exceptCol) continue;
     if(uncheckedValues[col].has(tr.dataset[col])) return false;
@@ -129,7 +153,11 @@ function buildFilterPanel(col){
   </div>`;
   sorted.forEach(v=>{
     const checked = !uncheckedValues[col].has(v);
-    html += `<label><input type="checkbox" ${checked?'checked':''} value="${v}" onchange="onFilterCheck('${col}',this)"> ${v}</label>`;
+    const safeV = v.replace(/'/g,"\\'");
+    html += `<div class="fp-opt">
+      <input type="checkbox" ${checked?'checked':''} value="${v}" onchange="onFilterCheck('${col}',this)">
+      <span class="fp-only" title="只看這一項" onclick="isolateValue('${col}','${safeV}')">${v}</span>
+    </div>`;
   });
   panel.innerHTML = html || '<div style="font-size:12px;color:#aaa;padding:4px 2px">（無可選項目）</div>';
 }
@@ -150,6 +178,15 @@ function setAllCol(col, checked){
   applyFilters();
   FILTER_COLS.forEach(c => { if(c !== col) buildFilterPanel(c); });
 }
+function isolateValue(col, value){
+  // 點選項文字：只看這一項，其餘同欄位選項自動取消勾選
+  document.querySelectorAll(`#fpanel-${col} input[type=checkbox]`).forEach(cb=>{
+    if(cb.value === value){ cb.checked = true; uncheckedValues[col].delete(cb.value); }
+    else { cb.checked = false; uncheckedValues[col].add(cb.value); }
+  });
+  applyFilters();
+  FILTER_COLS.forEach(c => { if(c !== col) buildFilterPanel(c); });
+}
 function toggleFilterPanel(e, col){
   e.stopPropagation();
   document.querySelectorAll('.fpanel').forEach(p=>{ if(p.id !== 'fpanel-'+col) p.classList.remove('open'); });
@@ -166,7 +203,7 @@ function applyFilters(){
   let visible = 0;
   document.querySelectorAll('#logTable tbody tr').forEach(tr=>{
     if(tr.dataset.search === undefined) return;
-    let ok = !q || tr.dataset.search.includes(q);
+    let ok = (!q || tr.dataset.search.includes(q)) && dateInRange(tr);
     if(ok){
       for(const col of FILTER_COLS){
         if(uncheckedValues[col].has(tr.dataset[col])){ ok = false; break; }

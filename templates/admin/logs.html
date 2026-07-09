@@ -5,39 +5,68 @@
 
 <h1 style="font-size:20px;color:#c0474d;margin-bottom:20px">📋 庫存異動紀錄（最近 200 筆）</h1>
 
-<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-  <input type="text" id="logSearch" placeholder="🔍 搜尋品項、品牌、申請人、原因、操作人…" oninput="filterLogs()"
-         style="flex:1;min-width:220px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-  <select id="logCatFilter" onchange="filterLogs()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-    <option value="">所有類別</option>
-    {% for c in cats %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
-  </select>
-  <select id="logTypeFilter" onchange="filterLogs()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-    <option value="">全部異動</option>
-    <option value="in">⬇️ 入庫（+）</option>
-    <option value="out">⬆️ 出庫（-）</option>
-  </select>
+<div style="margin-bottom:14px">
+  <input type="text" id="logSearch" placeholder="🔍 搜尋原因…" oninput="applyFilters()"
+         style="width:100%;max-width:320px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
 </div>
 
 <div class="card" style="padding:0;overflow-x:auto">
-<table style="min-width:720px" id="logTable">
+<table style="min-width:800px" id="logTable">
   <thead>
-    <tr><th>時間</th><th>類別</th><th>品項</th><th>品牌</th><th>規格</th><th>異動</th><th>申請人</th><th>原因</th><th>操作人</th></tr>
+    <tr>
+      <th>時間</th>
+      <th class="filterable" data-col="cat">類別
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'cat')">▾</button>
+        <div class="fpanel" id="fpanel-cat" onclick="event.stopPropagation()"></div>
+      </th>
+      <th class="filterable" data-col="item">品項
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'item')">▾</button>
+        <div class="fpanel" id="fpanel-item" onclick="event.stopPropagation()"></div>
+      </th>
+      <th class="filterable" data-col="brand">品牌
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'brand')">▾</button>
+        <div class="fpanel" id="fpanel-brand" onclick="event.stopPropagation()"></div>
+      </th>
+      <th class="filterable" data-col="spec">規格
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'spec')">▾</button>
+        <div class="fpanel" id="fpanel-spec" onclick="event.stopPropagation()"></div>
+      </th>
+      <th class="filterable" data-col="type">異動
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'type')">▾</button>
+        <div class="fpanel" id="fpanel-type" onclick="event.stopPropagation()"></div>
+      </th>
+      <th class="filterable" data-col="applicant">申請人
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'applicant')">▾</button>
+        <div class="fpanel" id="fpanel-applicant" onclick="event.stopPropagation()"></div>
+      </th>
+      <th>原因</th>
+      <th class="filterable" data-col="user">操作人
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'user')">▾</button>
+        <div class="fpanel" id="fpanel-user" onclick="event.stopPropagation()"></div>
+      </th>
+    </tr>
   </thead>
   <tbody>
   {% for log in logs %}
   {% set spec  = log.batch.spec if log.batch else none %}
   {% set brand = spec.brand if spec else none %}
   {% set item  = brand.item if brand else none %}
-  {% set cat_name = item.category.name if item and item.category else '' %}
-  <tr data-cat="{{ cat_name }}" data-type="{{ 'in' if log.change > 0 else 'out' }}"
-      data-search="{{ ((item.name if item else '') ~ ' ' ~ (brand.name if brand else '') ~ ' ' ~ (spec.name if spec else '') ~ ' ' ~ (log.applicant or '') ~ ' ' ~ (log.reason or '') ~ ' ' ~ (log.user.username if log.user else ''))|lower }}"
+  {% set cat_name = item.category.name if item and item.category else '—' %}
+  {% set item_name = item.name if item else '—' %}
+  {% set brand_name = brand.name if brand else '—' %}
+  {% set spec_name = spec.name if spec else '—' %}
+  {% set applicant_name = log.applicant or '—' %}
+  {% set user_name = log.user.username if log.user else '—' %}
+  {% set type_label = '入庫' if log.change > 0 else '出庫' %}
+  <tr data-cat="{{ cat_name }}" data-item="{{ item_name }}" data-brand="{{ brand_name }}" data-spec="{{ spec_name }}"
+      data-type="{{ type_label }}" data-applicant="{{ applicant_name }}" data-user="{{ user_name }}"
+      data-search="{{ (log.reason or '')|lower }}"
       style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(254,123,129,.06){% endif %}">
     <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
-    <td style="font-size:12px">{{ cat_name or '—' }}</td>
-    <td style="font-weight:600">{{ item.name if item else '—' }}</td>
-    <td style="font-size:12px;color:#6b5a52">{{ brand.name if brand else '—' }}</td>
-    <td style="font-size:12px">{{ spec.name if spec else '—' }}</td>
+    <td style="font-size:12px">{{ cat_name }}</td>
+    <td style="font-weight:600">{{ item_name }}</td>
+    <td style="font-size:12px;color:#6b5a52">{{ brand_name }}</td>
+    <td style="font-size:12px">{{ spec_name }}</td>
     <td>
       <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;
         background:{% if log.change > 0 %}#edf7f1{% else %}#fff0f1{% endif %};
@@ -45,9 +74,9 @@
         {{ '+' if log.change > 0 else '' }}{{ log.change }}
       </span>
     </td>
-    <td style="font-size:12px;color:#666">{{ log.applicant or '—' }}</td>
+    <td style="font-size:12px;color:#666">{{ applicant_name }}</td>
     <td style="font-size:12px;color:#666">{{ log.reason or '—' }}</td>
-    <td style="font-size:12px">{{ log.user.username if log.user else '—' }}</td>
+    <td style="font-size:12px">{{ user_name }}</td>
   </tr>
   {% else %}
   <tr><td colspan="9" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
@@ -58,22 +87,75 @@
 <div id="logNoMatch" style="display:none;text-align:center;color:#aaa;padding:24px">沒有符合篩選條件的紀錄</div>
 </div>
 
+<style>
+.filterable{position:relative;white-space:nowrap}
+.ffbtn{background:none;border:none;cursor:pointer;font-size:11px;color:#c0474d;padding:0 2px;vertical-align:middle}
+th.filter-active .ffbtn{color:#fe7b81;font-weight:900}
+.fpanel{display:none;position:absolute;top:100%;left:0;background:white;border:1px solid #ddd;border-radius:6px;
+  box-shadow:0 4px 14px rgba(0,0,0,.12);padding:8px;z-index:50;max-height:260px;overflow-y:auto;min-width:150px;
+  font-weight:400;text-align:left;text-transform:none}
+.fpanel.open{display:block}
+.fpanel label{display:block;padding:3px 2px;font-size:12px;white-space:nowrap;cursor:pointer}
+.fpanel .fp-actions{display:flex;gap:6px;margin-bottom:6px}
+.fpanel .fp-actions button{font-size:11px;padding:3px 8px;border:1px solid #ddd;background:#fafafa;border-radius:4px;cursor:pointer}
+</style>
+
 <script>
-function filterLogs(){
-  const q    = document.getElementById('logSearch').value.toLowerCase();
-  const cat  = document.getElementById('logCatFilter').value;
-  const type = document.getElementById('logTypeFilter').value;
+const FILTER_COLS = ['cat','item','brand','spec','type','applicant','user'];
+
+function buildFilterPanels(){
+  FILTER_COLS.forEach(col=>{
+    const vals = new Set();
+    document.querySelectorAll(`#logTable tbody tr[data-${col}]`).forEach(tr=>vals.add(tr.dataset[col]));
+    const sorted = Array.from(vals).sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+    const panel = document.getElementById('fpanel-'+col);
+    if(!panel) return;
+    let html = `<div class="fp-actions">
+      <button type="button" onclick="setAllCol('${col}',true)">全選</button>
+      <button type="button" onclick="setAllCol('${col}',false)">清空</button>
+    </div>`;
+    sorted.forEach(v=>{
+      html += `<label><input type="checkbox" checked value="${v}" onchange="applyFilters()"> ${v}</label>`;
+    });
+    panel.innerHTML = html;
+  });
+}
+function toggleFilterPanel(e, col){
+  e.stopPropagation();
+  document.querySelectorAll('.fpanel').forEach(p=>{ if(p.id !== 'fpanel-'+col) p.classList.remove('open'); });
+  document.getElementById('fpanel-'+col).classList.toggle('open');
+}
+document.addEventListener('click', ()=>{
+  document.querySelectorAll('.fpanel').forEach(p=>p.classList.remove('open'));
+});
+function setAllCol(col, checked){
+  document.querySelectorAll(`#fpanel-${col} input[type=checkbox]`).forEach(cb=>cb.checked=checked);
+  applyFilters();
+}
+function applyFilters(){
+  const allowed = {};
+  FILTER_COLS.forEach(col=>{
+    const boxes = document.querySelectorAll(`#fpanel-${col} input[type=checkbox]`);
+    const checkedVals = Array.from(boxes).filter(b=>b.checked).map(b=>b.value);
+    allowed[col] = new Set(checkedVals);
+    const th = document.querySelector(`th[data-col="${col}"]`);
+    if(th) th.classList.toggle('filter-active', boxes.length > 0 && checkedVals.length !== boxes.length);
+  });
+  const q = document.getElementById('logSearch').value.toLowerCase();
   let visible = 0;
   document.querySelectorAll('#logTable tbody tr').forEach(tr=>{
-    if(tr.dataset.search === undefined) return; // 空狀態那一列不參與篩選
-    const mq = !q || tr.dataset.search.includes(q);
-    const mc = !cat || tr.dataset.cat === cat;
-    const mt = !type || tr.dataset.type === type;
-    const show = mq && mc && mt;
-    tr.style.display = show ? '' : 'none';
-    if(show) visible++;
+    if(tr.dataset.search === undefined) return;
+    let ok = !q || tr.dataset.search.includes(q);
+    if(ok){
+      for(const col of FILTER_COLS){
+        if(!allowed[col].has(tr.dataset[col])){ ok = false; break; }
+      }
+    }
+    tr.style.display = ok ? '' : 'none';
+    if(ok) visible++;
   });
   document.getElementById('logNoMatch').style.display = visible === 0 ? 'block' : 'none';
 }
+buildFilterPanels();
 </script>
 {% endblock %}

@@ -111,7 +111,7 @@
       <button class="ftab"        onclick="setTab('out',this)">✕ 缺貨</button>
     </div>
     <a href="javascript:void(0)" onclick="openShortageModal('')" style="font-size:12px;color:var(--text3);text-decoration:underline;align-self:center">
-      找不到需要的品項？點此通知管理員
+      找不到需要的品項？<wbr>點此通知管理員
     </a>
   </div>
   <div class="cat-chips">
@@ -167,7 +167,7 @@
         {% if st == 'out' %}
         <div style="margin-top:4px" onclick="event.stopPropagation()">
           <a href="javascript:void(0)" onclick="openShortageModal('{{ item.name }}')" style="font-size:11px;color:var(--out);text-decoration:underline">
-            📢 急需這個品項？點此提醒管理員補貨
+            📢 急需這個品項？<wbr>點此提醒管理員補貨
           </a>
         </div>
         {% endif %}

@@ -824,7 +824,8 @@ def api_batches_by_spec(spec_id):
 @editor_required
 def admin_logs():
     logs = StockLog.query.order_by(StockLog.created_at.desc()).limit(200).all()
-    return render_template('admin/logs.html', logs=logs)
+    cats = Category.query.order_by(Category.sort_order, Category.name).all()
+    return render_template('admin/logs.html', logs=logs, cats=cats)
 
 
 # ── Sort order ────────────────────────────────────────────

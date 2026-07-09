@@ -167,8 +167,11 @@
     <button type="button" class="submit-btn out-submit" onclick="openOutModal()">⬆️ 選擇批次出庫</button>
   </div>
 
-  <div class="sb-section" style="margin-top:24px">最近異動</div>
-  <div class="recent-list">
+  <div class="sb-section" id="recentToggle" onclick="toggleRecentList()"
+       style="margin-top:24px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none">
+    <span>最近異動</span><span id="recentArrow" style="font-size:11px">▾</span>
+  </div>
+  <div class="recent-list" id="recentList">
     {% for log in recent_logs %}
     <div class="recent-item">
       <div class="rbadge {% if log.change > 0 %}in{% else %}out{% endif %}">
@@ -395,6 +398,17 @@ function submitOut(){
 }
 
 // ── tabs ──
+function toggleRecentList(){
+  const list  = document.getElementById('recentList');
+  const arrow = document.getElementById('recentArrow');
+  const collapsed = list.style.display === 'none';
+  list.style.display = collapsed ? 'block' : 'none';
+  arrow.textContent  = collapsed ? '▾' : '▸';
+}
+if(window.innerWidth <= 640){
+  document.getElementById('recentList').style.display = 'none';
+  document.getElementById('recentArrow').textContent  = '▸';
+}
 function switchTab(tab,el){
   document.querySelectorAll('.atab').forEach(e=>e.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(e=>e.classList.remove('active'));

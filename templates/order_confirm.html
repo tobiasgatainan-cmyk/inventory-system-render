@@ -26,6 +26,11 @@
     {% if order.note %}
     <div style="font-size:13px;margin-bottom:16px"><span style="color:#a8958c">備註：</span>{{ order.note }}</div>
     {% endif %}
+    {% if order.system_note %}
+    <div style="background:#fff0f1;border:1px solid #fe7b81;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#c0474d">
+      ⚠️ {{ order.system_note }}
+    </div>
+    {% endif %}
 
     <table class="order-table">
       <thead>

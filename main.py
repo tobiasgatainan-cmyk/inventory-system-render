@@ -207,6 +207,7 @@ class Order(db.Model):
     # pending=待處理 / confirmed=已出貨 / cancelled=已取消
     note         = db.Column(db.String(300), nullable=True)
     admin_note   = db.Column(db.String(300), nullable=True)   # 出貨調整說明／取消原因
+    system_note  = db.Column(db.String(500), nullable=True)   # 系統自動產生的備註（例如送出時庫存不足自動調整數量）
     created_at   = db.Column(db.DateTime, default=now_tw)
     confirmed_at = db.Column(db.DateTime, nullable=True)
     confirmed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -1008,7 +1009,7 @@ def api_cart_count():
 @app.route('/cart/update', methods=['POST'])
 def cart_update():
     data     = request.get_json()
-    batch_id = data.get('batch_id')
+    batch_id = int(data.get('batch_id'))
     qty      = int(data.get('qty', 0))
     cart     = session.get('cart', [])
 
@@ -1055,12 +1056,22 @@ def order_submit():
     order = Order(order_no=order_no, applicant=applicant, note=note)
     db.session.add(order); db.session.flush()
 
+    adjust_notes = []
     for entry in cart:
         batch = Batch.query.get(entry['batch_id'])
         if not batch: continue
+        requested = entry['qty']
+        actual = min(requested, batch.available_qty)
+        if actual < 0: actual = 0
         oi = OrderItem(order_id=order.id, batch_id=batch.id,
-                       qty_request=entry['qty'], qty_actual=entry['qty'])
+                       qty_request=actual, qty_actual=actual)
         db.session.add(oi)
+        if actual < requested:
+            item_name = batch.spec.brand.item.name if batch.spec and batch.spec.brand else '（品項）'
+            adjust_notes.append(f'{item_name}：申請 {requested} → 因庫存不足自動調整為 {actual}')
+
+    if adjust_notes:
+        order.system_note = '系統備註：' + '；'.join(adjust_notes) + '（此單為系統自動調整，建議優先確認補貨並留意送件先後順序）'
 
     db.session.commit()
     session['cart'] = []
@@ -1410,6 +1421,7 @@ with app.app_context():
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
                 "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS applicant VARCHAR(80)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS admin_note VARCHAR(300)",
+                "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS system_note VARCHAR(500)",
                 "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS split_batch_id INTEGER",
                 "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS split_qty INTEGER",
                 "ALTER TABLE shortage_requests ADD COLUMN IF NOT EXISTS handle_note VARCHAR(300)",

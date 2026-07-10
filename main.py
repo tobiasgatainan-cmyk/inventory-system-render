@@ -1152,14 +1152,9 @@ def admin_order_detail(oid):
     return render_template('admin/order_detail.html', order=order, today=today)
 
 
-@app.route('/admin/orders/<int:oid>/update', methods=['POST'])
-@login_required
-@editor_required
-def admin_order_update(oid):
-    order = Order.query.get_or_404(oid)
-    if order.status != 'pending':
-        flash('此申請單已處理', 'danger')
-        return redirect(url_for('admin_orders'))
+def _apply_order_adjustments(order):
+    """讀取表單裡的品項數量／批次／補足批次調整並套用（不 commit）。
+    儲存調整、確認出貨、取消申請都會呼叫這個函式，確保用的是畫面上最新的值。"""
     for oi in order.items:
         qty_key   = f'qty_{oi.id}'
         batch_key = f'batch_{oi.id}'
@@ -1176,6 +1171,17 @@ def admin_order_update(oid):
             sq = int(sq or 0)
             if sb and sq > 0:
                 db.session.add(OrderItemSplit(order_item_id=oi.id, batch_id=int(sb), qty=sq))
+
+
+@app.route('/admin/orders/<int:oid>/update', methods=['POST'])
+@login_required
+@editor_required
+def admin_order_update(oid):
+    order = Order.query.get_or_404(oid)
+    if order.status != 'pending':
+        flash('此申請單已處理', 'danger')
+        return redirect(url_for('admin_orders'))
+    _apply_order_adjustments(order)
     db.session.commit()
     flash('申請單已更新', 'success')
     return redirect(url_for('admin_order_detail', oid=oid))
@@ -1189,6 +1195,10 @@ def admin_order_confirm(oid):
     if order.status != 'pending':
         flash('此申請單已處理', 'danger')
         return redirect(url_for('admin_orders'))
+
+    # 先套用畫面上最新的品項數量／批次調整，避免用到修改前的舊資料
+    _apply_order_adjustments(order)
+    db.session.flush()
 
     order_reason = f'申請單 {order.order_no}' + (f'／{order.note}' if order.note else '')
 
@@ -1245,6 +1255,8 @@ def admin_order_confirm(oid):
 @editor_required
 def admin_order_cancel(oid):
     order = Order.query.get_or_404(oid)
+    if order.status == 'pending':
+        _apply_order_adjustments(order)
     order.status       = 'cancelled'
     order.admin_note   = request.form.get('admin_note', '').strip() or None
     order.confirmed_at = now_tw()

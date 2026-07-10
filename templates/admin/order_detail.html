@@ -151,7 +151,7 @@
         </div>
         <div style="flex:1">
           <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">補足批次</label>
-          <select name="split_batch_${oiId}[]" class="fi split-batch-select" style="width:100%;max-width:340px" onchange="onSplitBatchChange(this);refreshBatchOptions(${oiId})">${optionsHtml}</select>
+          <select name="split_batch_${oiId}[]" data-oi-id="${oiId}" class="fi split-batch-select" style="width:100%;max-width:340px" onchange="onSplitBatchChange(this);refreshBatchOptions(${oiId})">${optionsHtml}</select>
         </div>
         <button type="button" onclick="removeSplitRow(this, ${oiId})"
                 style="align-self:flex-end;padding:7px 10px;border:1px solid #ddd;background:white;border-radius:7px;cursor:pointer;color:#c0474d">✕</button>
@@ -166,9 +166,24 @@
       };
       refreshBatchOptions(oiId);
     }
+    function preventDuplicateBatch(select, oiId){
+      const primarySelect = document.getElementById('batchSelect-'+oiId);
+      const splitSelects  = Array.from(document.querySelectorAll(`select[name="split_batch_${oiId}[]"]`));
+      const allSelects = primarySelect ? [primarySelect, ...splitSelects] : splitSelects;
+      const value = select.value;
+      if(!value) return true;
+      const duplicated = allSelects.some(s => s !== select && s.value === value);
+      if(duplicated){
+        alert('這個批次已經在上面選過了，請選別的批次');
+        select.value = '';
+        return false;
+      }
+      return true;
+    }
     function onSplitBatchChange(select){
       const row = select.closest('.adj-row');
       const qtyInput = row.querySelector('.split-qty-input');
+      preventDuplicateBatch(select, select.dataset.oiId);
       const opt = select.selectedOptions[0];
       const max = opt ? parseInt(opt.dataset.qty || 0) : 0;
       qtyInput.max = max;
@@ -178,6 +193,7 @@
     function onPrimaryBatchChange(oiId){
       const select = document.getElementById('batchSelect-'+oiId);
       const qtyInput = document.getElementById('qty-'+oiId);
+      preventDuplicateBatch(select, oiId);
       const opt = select.selectedOptions[0];
       const max = opt ? parseInt(opt.dataset.qty || 0) : 0;
       qtyInput.max = max;

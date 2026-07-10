@@ -76,6 +76,7 @@
 .log-table tr:hover td{background:var(--bg)}
 .sort-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:white;border:1px solid var(--border);border-radius:var(--radius);cursor:grab;user-select:none}
 .move-btn{width:26px;height:26px;border:1px solid var(--border);background:var(--bg2,#f7f2ee);border-radius:6px;cursor:pointer;font-size:11px;color:var(--text2);display:flex;align-items:center;justify-content:center;padding:0}
+.move-btn:disabled{opacity:.3;cursor:not-allowed}
 .move-btn:active{background:var(--accent-light)}
 </style>
 
@@ -440,12 +441,33 @@ function moveRow(btn, dir){
   if(!target || !target.classList.contains('sort-row')) return; // 已經是第一個/最後一個
   if(dir < 0) row.parentNode.insertBefore(row, target);
   else row.parentNode.insertBefore(target, row);
+  updateMoveButtonsState(row.parentNode);
 }
+function updateMoveButtonsState(container){
+  const rows = [...container.querySelectorAll(':scope > .sort-row')];
+  rows.forEach((row, i) => {
+    const btns = row.querySelectorAll('.move-btn');
+    if(btns[0]) btns[0].disabled = (i === 0);
+    if(btns[1]) btns[1].disabled = (i === rows.length - 1);
+  });
+}
+function initAllMoveButtons(){
+  const catContainer = document.getElementById('sortCats');
+  if(catContainer) updateMoveButtonsState(catContainer);
+  document.querySelectorAll('.sort-item-group').forEach(updateMoveButtonsState);
+}
+initAllMoveButtons();
 
 // ── drag sort ──
 let dragEl=null;
 document.addEventListener('dragstart',e=>{if(e.target.classList.contains('sort-row')){dragEl=e.target;e.target.style.opacity='.5';}});
-document.addEventListener('dragend',e=>{if(e.target.classList.contains('sort-row')){e.target.style.opacity='';dragEl=null;}});
+document.addEventListener('dragend',e=>{
+  if(e.target.classList.contains('sort-row')){
+    e.target.style.opacity='';
+    dragEl=null;
+    initAllMoveButtons();
+  }
+});
 document.addEventListener('dragover',e=>{
   e.preventDefault();
   const row=e.target.closest('.sort-row');

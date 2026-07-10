@@ -108,6 +108,9 @@
       <span class="badge badge-{{ order.status }}" style="margin-left:8px">
         {% if order.status=='pending' %}待處理{% elif order.status=='confirmed' %}已出貨{% else %}已取消{% endif %}
       </span>
+      {% if order.system_note %}
+      <span style="margin-left:6px;background:#fff0f1;color:#c0474d;border:1px solid #fe7b81;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">⚠️ 數量已調整</span>
+      {% endif %}
     </div>
     <span class="order-time">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
   </div>

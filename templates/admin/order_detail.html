@@ -80,6 +80,12 @@
   </div>
 </div>
 
+{% if order.system_note %}
+<div style="background:#fff0f1;border:1px solid #fe7b81;border-radius:10px;padding:14px 16px;margin-top:12px;font-size:13px;color:#c0474d;font-weight:600">
+  ⚠️ {{ order.system_note }}
+</div>
+{% endif %}
+
 <!-- 品項列表（可調整） -->
 {% if order.status == 'pending' %}
 <form method="POST" action="{{ url_for('admin_order_update', oid=order.id) }}" id="mainForm">

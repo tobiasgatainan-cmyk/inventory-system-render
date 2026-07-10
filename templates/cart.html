@@ -18,6 +18,7 @@ input[type=text],textarea{width:100%;padding:8px 11px;border:1px solid #ddd;bord
 input[type=text]:focus,textarea:focus{border-color:#fe7b81}
 .submit-btn{width:100%;padding:12px;background:#fe7b81;color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
 .submit-btn:hover{background:#e55e65}
+.exp-date{font-size:11px}
 .exp-soon{color:#d97b2a;font-size:11px;font-weight:600}
 .exp-past{color:#d94f55;font-size:11px;font-weight:600}
 </style>
@@ -43,7 +44,7 @@ input[type=text]:focus,textarea:focus{border-color:#fe7b81}
       <td>{{ row.spec_name }}</td>
       <td>
         {% if row.expiry != '—' %}
-          <span class="{% if row.expiry <= today.isoformat() %}exp-past{% elif row.expiry <= today_30.isoformat() %}exp-soon{% endif %}">
+          <span class="exp-date {% if row.expiry <= today.isoformat() %}exp-past{% elif row.expiry <= today_30.isoformat() %}exp-soon{% endif %}">
             {{ row.expiry }}
           </span>
         {% else %}—{% endif %}
@@ -64,7 +65,7 @@ input[type=text]:focus,textarea:focus{border-color:#fe7b81}
 
   <div class="card">
     <h3 style="font-size:15px;font-weight:700;margin-bottom:16px">📝 填寫申請資料</h3>
-    <form method="POST" action="{{ url_for('order_submit') }}">
+    <form method="POST" action="{{ url_for('order_submit') }}" id="checkoutForm">
       <div class="form-group">
         <label>申請人姓名 *</label>
         <input type="text" name="applicant" required placeholder="請填寫您的姓名">
@@ -101,7 +102,21 @@ async function updateQty(batchId, qty){
     if(input) input.value = data.qty;
     alert(`目前庫存不足，數量已自動調整為 ${data.qty}`);
   }
+  return data;
 }
+
+document.getElementById('checkoutForm')?.addEventListener('submit', async function(e){
+  e.preventDefault();
+  const btn = this.querySelector('.submit-btn');
+  btn.disabled = true; btn.textContent = '處理中…';
+  // 送出前，先確保畫面上每一筆數量都已經真的同步到伺服器，避免用到修改前的舊數字
+  const inputs = document.querySelectorAll('.qty-input');
+  for(const input of inputs){
+    const batchId = input.id.replace('qty-','');
+    await updateQty(batchId, input.value);
+  }
+  this.submit();
+});
 async function removeItem(batchId){
   await fetch('/cart/update',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({batch_id:batchId,qty:0})});

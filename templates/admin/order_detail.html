@@ -82,7 +82,7 @@
 
 <!-- 品項列表（可調整） -->
 {% if order.status == 'pending' %}
-<form method="POST" action="{{ url_for('admin_order_update', oid=order.id) }}" id="updateForm">
+<form method="POST" action="{{ url_for('admin_order_update', oid=order.id) }}" id="mainForm">
 {% endif %}
 
 <div class="detail-card">
@@ -204,6 +204,7 @@
     {% for s in oi.splits %}
     addSplitRow({{ oi.id }}, {{ s.batch_id }}, {{ s.qty }});
     {% endfor %}
+    refreshBatchOptions({{ oi.id }});
     </script>
     {% else %}
     <div style="font-size:12px;color:#a8958c">
@@ -222,7 +223,6 @@
   </div>
   {% endif %}
 </div>
-{% if order.status == 'pending' %}</form>{% endif %}
 
 <!-- 確認出貨 -->
 {% if order.status == 'pending' %}
@@ -230,7 +230,7 @@
   <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:6px">
     備註（出貨時可說明調整了什麼品項／數量、為什麼；取消時可說明取消原因）
   </label>
-  <textarea id="adminNoteInput" rows="2" class="fi" style="width:100%;resize:vertical" placeholder="選填"></textarea>
+  <textarea name="admin_note" rows="2" class="fi" style="width:100%;resize:vertical" placeholder="選填"></textarea>
 </div>
 <div class="confirm-bar">
   <div>
@@ -238,19 +238,16 @@
     <div style="font-size:12px;color:#a8958c;margin-top:2px">請確認數量與批次無誤後再確認出貨</div>
   </div>
   <div style="display:flex;gap:8px">
-    <form method="POST" action="{{ url_for('admin_order_cancel', oid=order.id) }}" id="cancelForm"
-          onsubmit="document.getElementById('cancelNote').value=document.getElementById('adminNoteInput').value; return confirm('確定取消此申請單？')">
-      <input type="hidden" name="admin_note" id="cancelNote">
-      <button type="submit" class="btn btn-secondary">✕ 取消申請</button>
-    </form>
-    <form method="POST" action="{{ url_for('admin_order_confirm', oid=order.id) }}" id="confirmForm"
-          onsubmit="document.getElementById('confirmNote').value=document.getElementById('adminNoteInput').value; return confirm('確認出貨後將扣除庫存，無法復原，確定嗎？')">
-      <input type="hidden" name="admin_note" id="confirmNote">
-      <button type="submit" class="btn btn-success">🚚 確認出貨</button>
-    </form>
+    <button type="submit" class="btn btn-secondary"
+            formaction="{{ url_for('admin_order_cancel', oid=order.id) }}"
+            onclick="return confirm('確定取消此申請單？（畫面上的調整會一併儲存）')">✕ 取消申請</button>
+    <button type="submit" class="btn btn-success"
+            formaction="{{ url_for('admin_order_confirm', oid=order.id) }}"
+            onclick="return confirm('確認出貨後將扣除庫存，無法復原，確定嗎？')">🚚 確認出貨</button>
   </div>
 </div>
 {% endif %}
+</form>
 
 </div>
 <script>

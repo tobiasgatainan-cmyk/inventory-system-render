@@ -211,15 +211,6 @@
         <option value="">所有類別</option>
         {% for c in cats %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
       </select>
-      {% if current_user.can_edit() %}
-      <form method="POST" action="{{ url_for('gsheet_sync') }}" style="margin:0">
-        <button type="submit" style="padding:7px 12px;background:var(--ok-light);color:var(--ok);border:1px solid #8ecaaa;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">📊 同步至 Sheet</button>
-      </form>
-      <form method="POST" action="{{ url_for('gsheet_import') }}" style="margin:0"
-            onsubmit="return confirm('確定從 Google Sheet 匯入？這會覆蓋資料庫數量。')">
-        <button type="submit" style="padding:7px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #a8c7fa;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer">📥 從 Sheet 匯入</button>
-      </form>
-      {% endif %}
       <a href="{{ url_for('admin_add_item') }}" class="add-btn">＋ 新增品項</a>
     </div>
     <div style="overflow-x:auto">

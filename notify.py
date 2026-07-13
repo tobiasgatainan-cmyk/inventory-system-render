@@ -129,6 +129,35 @@ def send_shortage_notify(req):
     _send(recipients, f'【庫存回報】{req.applicant} 反映「{req.item_name}」缺貨／需求', html)
 
 
+def send_sync_alert(health):
+    """Google Sheet 同步連續失敗達門檻時通知管理員"""
+    recipients = _get_notify_recipients()
+    if not recipients:
+        return
+
+    admin_url = f'{SITE_URL}/admin/items'
+    html = f"""
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#c0474d;color:white;padding:16px 24px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0">⚠️ Google Sheet 同步異常</h2>
+      </div>
+      <div style="background:#fff;padding:24px;border:1px solid #edddd0;border-top:none;border-radius:0 0 8px 8px">
+        <p>系統偵測到 Google Sheet 同步已經連續失敗 <strong>{health.consecutive_fails}</strong> 次。</p>
+        <p><strong>最近一次錯誤：</strong>{health.last_error or '（無詳細訊息）'}</p>
+        <p><strong>最近一次成功同步時間：</strong>{health.last_success_at.strftime('%Y-%m-%d %H:%M') if health.last_success_at else '（尚無紀錄）'}</p>
+        <p style="color:#c0474d">
+          系統本身的操作不受影響，庫存、申請單資料都正常，只有 Google Sheet 這份副本可能有缺漏。<br>
+          「異動紀錄」「歷史庫存比較」這兩個分頁如果有漏同步，無法自動回補，請以系統後台的資料為準。
+        </p>
+        <a href="{admin_url}" style="display:inline-block;padding:10px 20px;background:#c0474d;color:white;text-decoration:none;border-radius:6px;font-weight:bold">
+          前往後台檢查
+        </a>
+      </div>
+    </div>
+    """
+    _send(recipients, f'【庫存系統】Google Sheet 同步異常（已連續失敗 {health.consecutive_fails} 次）', html)
+
+
 def send_test_email(to_email: str, username: str):
     """寄送測試信"""
     html = f"""

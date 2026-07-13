@@ -153,71 +153,75 @@ def full_sync():
 
 
 # ── Append log row ────────────────────────────────────────
-def append_log_row(batch, change, reason, username, applicant=''):
-    """修復：每次都確認標題列，然後在最後一行後 append"""
-    ws  = _sheet('異動紀錄')
-    now = now_tw().strftime('%Y-%m-%d %H:%M:%S')
+def _build_log_row(batch, change, reason, username, applicant=''):
+    """組出異動紀錄要寫入的內容（不含寫入動作），供正常寫入與失敗後補寫共用"""
+    now   = now_tw().strftime('%Y-%m-%d %H:%M:%S')
+    spec  = batch.spec
+    brand = spec.brand
+    item  = brand.item
+    return {
+        'sheet': '異動紀錄',
+        'headers': ['時間','類別','品項','品牌','規格','異動','申請人','原因','操作人'],
+        'row': [
+            now,
+            item.category.name if item.category else '',
+            item.name,
+            brand.name,
+            spec.name,
+            f'+{change}' if change > 0 else str(change),
+            applicant,
+            reason,
+            username,
+        ],
+    }
 
-    HEADERS = ['時間','類別','品項','品牌','規格','異動','申請人','原因','操作人']
 
-    # 確認第一列是標題列（如果空的或標題不對就重設）
+def _build_purchase_row(batch, username):
+    """組出歷史庫存比較要寫入的內容（不含寫入動作），供正常寫入與失敗後補寫共用"""
+    now   = now_tw().strftime('%Y-%m-%d %H:%M')
+    spec  = batch.spec
+    brand = spec.brand
+    item  = brand.item
+    return {
+        'sheet': '歷史庫存比較',
+        'headers': ['時間','品項','品牌','規格','入庫數量','到期日','進價','供應商','備註','操作人'],
+        'row': [
+            now,
+            item.name,
+            brand.name,
+            spec.name,
+            batch.qty,
+            batch.expiry_date.isoformat() if batch.expiry_date else '',
+            float(batch.cost_price) if batch.cost_price else '',
+            batch.supplier or '',
+            batch.note or '',
+            username,
+        ],
+    }
+
+
+def append_row_raw(built):
+    """把 _build_log_row / _build_purchase_row 組好的內容真正寫進 Sheet"""
+    ws = _sheet(built['sheet'])
     try:
         first_row = ws.row_values(1)
     except Exception:
         first_row = []
-
-    if first_row != HEADERS:
+    if first_row != built['headers']:
         ws.clear()
-        ws.append_row(HEADERS)
+        ws.append_row(built['headers'])
+    ws.append_row(built['row'])
 
-    spec  = batch.spec
-    brand = spec.brand
-    item  = brand.item
-    ws.append_row([
-        now,
-        item.category.name if item.category else '',
-        item.name,
-        brand.name,
-        spec.name,
-        f'+{change}' if change > 0 else str(change),
-        applicant,
-        reason,
-        username,
-    ])
+
+def append_log_row(batch, change, reason, username, applicant=''):
+    """修復：每次都確認標題列，然後在最後一行後 append"""
+    append_row_raw(_build_log_row(batch, change, reason, username, applicant))
 
 
 # ── Append purchase record ────────────────────────────────
 def append_purchase_record(batch, username):
     """入庫時記錄歷史進貨資料，方便日後比價、選擇進貨管道"""
-    ws  = _sheet('歷史庫存比較')
-    now = now_tw().strftime('%Y-%m-%d %H:%M')
-
-    HEADERS = ['時間','品項','品牌','規格','入庫數量','到期日','進價','供應商','備註','操作人']
-
-    try:
-        first_row = ws.row_values(1)
-    except Exception:
-        first_row = []
-
-    if first_row != HEADERS:
-        ws.clear()
-        ws.append_row(HEADERS)
-
-    spec  = batch.spec
-    brand = spec.brand
-    item  = brand.item
-    ws.append_row([
-        now,
-        item.name,
-        brand.name,
-        spec.name,
-        batch.qty,
-        batch.expiry_date.isoformat() if batch.expiry_date else '',
-        float(batch.cost_price) if batch.cost_price else '',
-        batch.supplier or '',
-        batch.note or '',
-        username,
-    ])
+    append_row_raw(_build_purchase_row(batch, username))
 
 
 # ── Import from sheet ─────────────────────────────────────

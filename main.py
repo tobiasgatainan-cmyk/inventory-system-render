@@ -186,6 +186,29 @@ class StockLog(db.Model):
     batch      = db.relationship('Batch', backref='logs')
 
 
+class SyncQueue(db.Model):
+    """Google Sheet 同步失敗時，先排隊，之後自動重試補寫"""
+    __tablename__ = 'sync_queue'
+    id         = db.Column(db.Integer, primary_key=True)
+    kind       = db.Column(db.String(20), nullable=False)   # append_row / order / shortage / full_inventory
+    ref_id     = db.Column(db.Integer, nullable=True)       # order/shortage 用：對應的 Order.id / ShortageRequest.id
+    payload    = db.Column(db.Text, nullable=True)          # append_row 用：已經組好的列內容快照（JSON）
+    attempts   = db.Column(db.Integer, default=0)
+    last_error = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=now_tw)
+
+
+class SyncHealth(db.Model):
+    """全站 Google Sheet 同步健康狀態（只會有一筆資料）"""
+    __tablename__ = 'sync_health'
+    id                = db.Column(db.Integer, primary_key=True)
+    consecutive_fails = db.Column(db.Integer, default=0)
+    last_success_at   = db.Column(db.DateTime, nullable=True)
+    last_fail_at      = db.Column(db.DateTime, nullable=True)
+    last_error        = db.Column(db.String(300), nullable=True)
+    alert_sent        = db.Column(db.Boolean, default=False)  # 這一波連續失敗是否已經寄過提醒信
+
+
 class ShortageRequest(db.Model):
     """前台申請人回報「缺貨」或「找不到需要的品項」"""
     __tablename__ = 'shortage_requests'
@@ -741,12 +764,12 @@ def stock_in():
     log = StockLog(batch_id=batch.id, change=qty, reason=reason, user_id=current_user.id)
     db.session.add(log); db.session.commit()
 
-    try:
-        from gsheet import append_log_row, append_purchase_record, full_sync
-        append_log_row(batch, qty, reason, current_user.username)
-        append_purchase_record(batch, current_user.username)
-        full_sync()
-    except Exception: pass
+    from gsheet import _build_log_row, _build_purchase_row, append_row_raw, full_sync
+    log_built = _build_log_row(batch, qty, reason, current_user.username)
+    _sync_or_queue('append_row', lambda: append_row_raw(log_built), payload=log_built)
+    purchase_built = _build_purchase_row(batch, current_user.username)
+    _sync_or_queue('append_row', lambda: append_row_raw(purchase_built), payload=purchase_built)
+    _sync_or_queue('full_inventory', full_sync)
     return redirect(request.referrer or url_for('admin_items'))
 
 
@@ -773,11 +796,10 @@ def stock_out():
     log = StockLog(batch_id=batch_id, change=-qty, applicant=applicant, reason=reason, user_id=current_user.id)
     db.session.add(log); db.session.commit()
 
-    try:
-        from gsheet import append_log_row, full_sync
-        append_log_row(batch, -qty, reason, current_user.username, applicant=applicant)
-        full_sync()
-    except Exception: pass
+    from gsheet import _build_log_row, append_row_raw, full_sync
+    log_built = _build_log_row(batch, -qty, reason, current_user.username, applicant=applicant)
+    _sync_or_queue('append_row', lambda: append_row_raw(log_built), payload=log_built)
+    _sync_or_queue('full_inventory', full_sync)
 
     flash(f'出庫成功（-{qty}）', 'success')
     return redirect(request.referrer or url_for('admin_items'))
@@ -889,11 +911,8 @@ def report_shortage():
         send_shortage_notify(req)
     except Exception as e:
         app.logger.warning(f'send_shortage_notify failed: {e}')
-    try:
-        from gsheet import sync_shortage
-        sync_shortage(req)
-    except Exception as e:
-        app.logger.warning(f'sync_shortage failed: {e}')
+    from gsheet import sync_shortage
+    _sync_or_queue('shortage', lambda: sync_shortage(req), ref_id=req.id)
 
     return jsonify({'ok': True})
 
@@ -915,11 +934,8 @@ def admin_toggle_shortage(rid):
         req.handle_note = note
     req.resolved = not req.resolved
     db.session.commit()
-    try:
-        from gsheet import sync_shortage
-        sync_shortage(req)
-    except Exception as e:
-        app.logger.warning(f'sync_shortage failed: {e}')
+    from gsheet import sync_shortage
+    _sync_or_queue('shortage', lambda: sync_shortage(req), ref_id=req.id)
     return redirect(url_for('admin_orders', view='shortage',
                             sr_status='resolved' if req.resolved else 'pending'))
 
@@ -932,11 +948,8 @@ def admin_shortage_note(rid):
     req.handle_note = request.form.get('handle_note', '').strip() or None
     db.session.commit()
     flash('備註已儲存', 'success')
-    try:
-        from gsheet import sync_shortage
-        sync_shortage(req)
-    except Exception as e:
-        app.logger.warning(f'sync_shortage failed: {e}')
+    from gsheet import sync_shortage
+    _sync_or_queue('shortage', lambda: sync_shortage(req), ref_id=req.id)
     return redirect(url_for('admin_orders', view='shortage',
                             sr_status='resolved' if req.resolved else 'pending'))
 
@@ -1011,6 +1024,7 @@ def cart_update():
     data     = request.get_json()
     batch_id = int(data.get('batch_id'))
     qty      = int(data.get('qty', 0))
+    requested = qty
     cart     = session.get('cart', [])
 
     batch = Batch.query.get(batch_id)
@@ -1024,6 +1038,12 @@ def cart_update():
         for entry in cart:
             if entry['batch_id'] == batch_id:
                 entry['qty'] = qty
+                if qty < requested:
+                    # 記錄「調整前的原始需求數量」，如果之前已經被調整過，取最早的那個原始值
+                    entry['adjusted_from'] = max(entry.get('adjusted_from', requested), requested)
+                elif 'adjusted_from' in entry and qty >= entry['adjusted_from']:
+                    # 庫存後來變充足了，不再算是被調整過
+                    del entry['adjusted_from']
     session['cart'] = cart
     session.modified = True
     return jsonify({'ok': True, 'qty': qty, 'max': max_qty})
@@ -1060,8 +1080,10 @@ def order_submit():
     for entry in cart:
         batch = Batch.query.get(entry['batch_id'])
         if not batch: continue
-        requested = entry['qty']
-        actual = min(requested, batch.available_qty)
+        # 原始需求數量：如果之前在購物車頁面已經因庫存不足被調整過，取調整前的原始值；
+        # 否則就是目前這個數字本身
+        requested = entry.get('adjusted_from', entry['qty'])
+        actual = min(entry['qty'], batch.available_qty)  # 送出當下再保險檢查一次
         if actual < 0: actual = 0
         oi = OrderItem(order_id=order.id, batch_id=batch.id,
                        qty_request=actual, qty_actual=actual)
@@ -1083,11 +1105,8 @@ def order_submit():
         send_order_notify(order)
     except Exception: pass
 
-    try:
-        from gsheet import sync_order
-        sync_order(order)
-    except Exception as e:
-        app.logger.warning(f'sync_order failed: {e}')
+    from gsheet import sync_order
+    _sync_or_queue('order', lambda: sync_order(order), ref_id=order.id)
 
     return redirect(url_for('order_confirm', order_no=order_no))
 
@@ -1212,6 +1231,7 @@ def admin_order_confirm(oid):
     db.session.flush()
 
     order_reason = f'申請單 {order.order_no}' + (f'／{order.note}' if order.note else '')
+    pending_log_rows = []  # 收集要同步的異動列，等整張單成功後才統一處理
 
     def deduct(item_name, batch_id, qty):
         """扣單一批次庫存並記錄異動,回傳錯誤訊息（無錯誤則為 None）"""
@@ -1229,10 +1249,8 @@ def admin_order_confirm(oid):
                        applicant=order.applicant, reason=order_reason,
                        user_id=current_user.id)
         db.session.add(log)
-        try:
-            from gsheet import append_log_row
-            append_log_row(batch, -qty, order_reason, current_user.username, applicant=order.applicant)
-        except Exception: pass
+        from gsheet import _build_log_row
+        pending_log_rows.append(_build_log_row(batch, -qty, order_reason, current_user.username, applicant=order.applicant))
         return None
 
     for oi in order.items:
@@ -1252,12 +1270,13 @@ def admin_order_confirm(oid):
     order.admin_note   = request.form.get('admin_note', '').strip() or None
     db.session.commit()
     flash(f'申請單 {order.order_no} 已確認出貨，庫存已扣除', 'success')
-    try:
-        from gsheet import sync_order, full_sync
-        sync_order(order)
-        full_sync()
-    except Exception as e:
-        app.logger.warning(f'gsheet sync failed: {e}')
+
+    # 整張單確認成功後，才統一處理所有 Google Sheet 同步
+    from gsheet import append_row_raw, sync_order, full_sync
+    for built in pending_log_rows:
+        _sync_or_queue('append_row', lambda b=built: append_row_raw(b), payload=built)
+    _sync_or_queue('order', lambda: sync_order(order), ref_id=order.id)
+    _sync_or_queue('full_inventory', full_sync)
     return redirect(url_for('admin_orders'))
 
 
@@ -1273,11 +1292,8 @@ def admin_order_cancel(oid):
     order.confirmed_at = now_tw()
     db.session.commit()
     flash('申請單已取消', 'success')
-    try:
-        from gsheet import sync_order
-        sync_order(order)
-    except Exception as e:
-        app.logger.warning(f'sync_order failed: {e}')
+    from gsheet import sync_order
+    _sync_or_queue('order', lambda: sync_order(order), ref_id=order.id)
     return redirect(url_for('admin_orders'))
 
 
@@ -1304,18 +1320,137 @@ def admin_user_notify(uid):
     return redirect(url_for('admin_users'))
 
 
+# ── Google Sheet 同步排隊機制 ──────────────────────────────
+SYNC_ALERT_THRESHOLD = 3  # 連續失敗幾次才寄信提醒
+
+def _get_sync_health():
+    h = SyncHealth.query.first()
+    if not h:
+        h = SyncHealth()
+        db.session.add(h)
+        db.session.commit()
+    return h
+
+def _record_sync_success():
+    h = _get_sync_health()
+    h.consecutive_fails = 0
+    h.last_success_at   = now_tw()
+    h.alert_sent         = False
+    db.session.commit()
+
+def _record_sync_failure(error_msg):
+    h = _get_sync_health()
+    h.consecutive_fails += 1
+    h.last_fail_at = now_tw()
+    h.last_error    = (error_msg or '')[:300]
+    db.session.commit()
+    if h.consecutive_fails >= SYNC_ALERT_THRESHOLD and not h.alert_sent:
+        try:
+            from notify import send_sync_alert
+            send_sync_alert(h)
+        except Exception as e:
+            app.logger.warning(f'send_sync_alert failed: {e}')
+        h.alert_sent = True
+        db.session.commit()
+
+def _sync_or_queue(kind, fn, ref_id=None, payload=None):
+    """執行一次同步；成功就記錄健康狀態，失敗就排隊等自動重試，並更新失敗計數"""
+    try:
+        fn()
+        _record_sync_success()
+        return True
+    except Exception as e:
+        db.session.add(SyncQueue(
+            kind=kind, ref_id=ref_id,
+            payload=json.dumps(payload, ensure_ascii=False) if payload else None,
+            last_error=str(e)[:300],
+        ))
+        db.session.commit()
+        _record_sync_failure(str(e))
+        return False
+
+def _process_sync_queue(limit=5):
+    """處理排隊中的同步項目；一遇到失敗就停止這次處理，避免同一個問題卡住每次請求"""
+    from gsheet import append_row_raw, sync_order, sync_shortage, full_sync
+    items = SyncQueue.query.order_by(SyncQueue.created_at).limit(limit).all()
+    for q in items:
+        try:
+            if q.kind == 'append_row':
+                append_row_raw(json.loads(q.payload))
+            elif q.kind == 'order':
+                order = Order.query.get(q.ref_id)
+                if order: sync_order(order)
+            elif q.kind == 'shortage':
+                req = ShortageRequest.query.get(q.ref_id)
+                if req: sync_shortage(req)
+            elif q.kind == 'full_inventory':
+                full_sync()
+            db.session.delete(q)
+            db.session.commit()
+            _record_sync_success()
+        except Exception as e:
+            q.attempts += 1
+            q.last_error = str(e)[:300]
+            db.session.commit()
+            _record_sync_failure(str(e))
+            break  # 這個還是失敗，先停止，避免拖慢這次請求，下次再試
+
+_last_queue_check = {'time': None}
+
+@app.context_processor
+def _inject_sync_health():
+    if not current_user.is_authenticated:
+        return {}
+    try:
+        h = SyncHealth.query.first()
+    except Exception:
+        h = None
+    queue_count = 0
+    try:
+        queue_count = SyncQueue.query.count()
+    except Exception:
+        pass
+    return {'sync_health': h, 'sync_queue_count': queue_count}
+
+
+@app.before_request
+def _maybe_process_sync_queue():
+    # 節流：每 5 分鐘最多主動檢查一次排隊佇列，搭配一般網站流量自然觸發，不用另外開背景程序
+    if request.endpoint in ('static',):
+        return
+    now = now_tw()
+    last = _last_queue_check['time']
+    if last and (now - last).total_seconds() < 300:
+        return
+    _last_queue_check['time'] = now
+    try:
+        if SyncQueue.query.first():
+            _process_sync_queue()
+    except Exception:
+        pass
+
+
 # ── Google Sheet ──────────────────────────────────────────
 @app.route('/admin/gsheet/sync', methods=['POST'])
 @login_required
 @editor_required
 def gsheet_sync():
     try:
-        from gsheet import full_sync
+        from gsheet import full_sync, sync_order, sync_shortage
         result = full_sync()
-        flash(f'Google Sheet 同步完成：{result}', 'success')
+        _record_sync_success()
+        # 順便把所有申請單、缺貨回報都重新同步一次，補齊過去可能漏掉的
+        for order in Order.query.all():
+            sync_order(order)
+        for req in ShortageRequest.query.all():
+            sync_shortage(req)
+        # 排隊中的也一併清一清
+        _process_sync_queue(limit=50)
+        flash(f'Google Sheet 全面同步完成：{result}', 'success')
     except Exception as e:
+        _record_sync_failure(str(e))
         flash(f'同步失敗：{e}', 'danger')
-    return redirect(url_for('admin_items'))
+    return redirect(request.referrer or url_for('admin_items'))
 
 @app.route('/admin/gsheet/import', methods=['POST'])
 @login_required
@@ -1327,7 +1462,7 @@ def gsheet_import():
         flash(f'從 Sheet 匯入完成：{result}', 'success')
     except Exception as e:
         flash(f'匯入失敗：{e}', 'danger')
-    return redirect(url_for('admin_items'))
+    return redirect(request.referrer or url_for('admin_items'))
 
 
 # ── API: low-stock ────────────────────────────────────────

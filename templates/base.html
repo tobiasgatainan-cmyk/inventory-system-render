@@ -98,6 +98,25 @@ input:focus,select:focus,textarea:focus{border-color:#fe7b81}
   </div>
 </nav>
 
+{% if current_user.is_authenticated and current_user.can_edit() %}
+<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:8px 24px;background:#fff8f5;border-bottom:1px solid var(--border,#f0e0d8);flex-wrap:wrap">
+  {% if sync_health and sync_health.consecutive_fails >= 3 %}
+  <span style="font-size:12px;color:#c0474d;font-weight:600">
+    ⚠️ Google Sheet 同步已連續失敗 {{ sync_health.consecutive_fails }} 次{% if sync_queue_count %}，{{ sync_queue_count }} 筆排隊等待重試{% endif %}
+  </span>
+  {% elif sync_queue_count %}
+  <span style="font-size:12px;color:#d97b2a">⏳ {{ sync_queue_count }} 筆同步排隊中，稍後會自動補上</span>
+  {% endif %}
+  <form method="POST" action="{{ url_for('gsheet_sync') }}" style="display:inline">
+    <button type="submit" style="padding:6px 12px;background:#edf7f1;color:#4a9e6b;border:1px solid #8ecaaa;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">📊 同步至 Sheet</button>
+  </form>
+  <form method="POST" action="{{ url_for('gsheet_import') }}" style="display:inline"
+        onsubmit="return confirm('確定從 Google Sheet 匯入？這會覆蓋資料庫數量。')">
+    <button type="submit" style="padding:6px 12px;background:#e8f0fe;color:#1a73e8;border:1px solid #a8c7fa;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">📥 從 Sheet 匯入</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="flash-wrap">
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for cat, msg in messages %}

@@ -120,12 +120,13 @@
       </div>
       <div style="flex:1">
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">
-          出貨批次 <span style="font-weight:400">（可換成更近到期的批次；庫存已扣除此單其他品項的佔用）</span>
+          出貨批次 <span style="font-weight:400">（可換成更近到期的批次；已被此單其他品項使用的批次不能選）</span>
         </label>
         <select name="batch_{{ oi.id }}" id="batchSelect-{{ oi.id }}" class="fi" style="width:100%;max-width:380px"
                 onchange="onPrimaryBatchChange({{ oi.id }})">
           {% for opt in oi._batch_options %}
-          <option value="{{ opt.id }}" data-qty="{{ opt.qty }}" {% if opt.id == oi.batch_id %}selected{% endif %}>
+          <option value="{{ opt.id }}" data-qty="{{ opt.qty }}" data-cross-disabled="{{ '1' if opt.disabled else '0' }}"
+                  {% if opt.disabled %}disabled{% endif %} {% if opt.id == oi.batch_id %}selected{% endif %}>
             {{ opt.label }}
           </option>
           {% endfor %}
@@ -149,7 +150,7 @@
       row.className = 'adj-row';
       row.style.marginTop = '6px';
       const optionsHtml = '<option value="">— 選擇批次 —</option>' + opts.map(o =>
-        `<option value="${o.id}" data-qty="${o.qty}" ${presetBatchId==o.id?'selected':''}>${o.label}</option>`).join('');
+        `<option value="${o.id}" data-qty="${o.qty}" data-cross-disabled="${o.disabled ? '1' : '0'}" ${o.disabled ? 'disabled' : ''} ${presetBatchId==o.id?'selected':''}>${o.label}</option>`).join('');
       row.innerHTML = `
         <div>
           <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">補足數量</label>
@@ -219,7 +220,8 @@
       allSelects.forEach(s => {
         Array.from(s.options).forEach(opt => {
           if(!opt.value) return;
-          opt.disabled = chosen.includes(opt.value) && opt.value !== s.value;
+          const crossDisabled = opt.dataset.crossDisabled === '1';
+          opt.disabled = crossDisabled || (chosen.includes(opt.value) && opt.value !== s.value);
         });
       });
     }

@@ -86,12 +86,20 @@
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
     <div class="form-group" style="grid-column:1/-1">
       <label>分類</label>
-      <select name="category_id">
-        <option value="">— 未分類 —</option>
-        {% for c in cats %}
-        <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
-        {% endfor %}
-      </select>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select name="category_id" id="categorySelect" style="flex:1;min-width:140px"
+                onchange="if(this.value) document.getElementById('newCategoryInput').value=''">
+          <option value="">— 未分類 —</option>
+          {% for c in cats %}
+          <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+        <span style="font-size:12px;color:#a8958c">或</span>
+        <input type="text" name="new_category_name" id="newCategoryInput" placeholder="直接輸入新分類名稱"
+               style="flex:1;min-width:160px"
+               oninput="if(this.value.trim()) document.getElementById('categorySelect').value=''">
+      </div>
+      <div style="font-size:11px;color:#a8958c;margin-top:4px">下拉選單挑既有分類，或直接在右邊輸入新分類名稱（兩者擇一，輸入新名稱優先）</div>
     </div>
     <div class="form-group" style="grid-column:1/-1">
       <label>品項名稱</label>

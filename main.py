@@ -1076,21 +1076,49 @@ def order_submit():
     order = Order(order_no=order_no, applicant=applicant, note=note)
     db.session.add(order); db.session.flush()
 
-    adjust_notes = []
+    # 依「規格」分組（同一個規格底下可能有多個批次）。購物車裡個別批次的數量只是
+    # 加入購物車當下的分配結果，送出當下重新用最新的可用庫存跑一次到期日優先分配，
+    # 這樣如果原本分配到的批次庫存被別人搶走，需求可以轉移到同規格下還有庫存的批次，
+    # 不會平白損失掉（例如：分配到批次A的數量因為批次A被佔用而砍為0時，
+    # 應該優先補到同規格其他還有庫存的批次，而不是就此作廢）。
+    groups = {}
+    order_keys = []
     for entry in cart:
         batch = Batch.query.get(entry['batch_id'])
         if not batch: continue
+        spec_id = batch.spec_id
+        if spec_id not in groups:
+            groups[spec_id] = {'spec': batch.spec, 'requested': 0}
+            order_keys.append(spec_id)
         # 原始需求數量：如果之前在購物車頁面已經因庫存不足被調整過，取調整前的原始值；
         # 否則就是目前這個數字本身
-        requested = entry.get('adjusted_from', entry['qty'])
-        actual = min(entry['qty'], batch.available_qty)  # 送出當下再保險檢查一次
-        if actual < 0: actual = 0
-        oi = OrderItem(order_id=order.id, batch_id=batch.id,
-                       qty_request=actual, qty_actual=actual)
-        db.session.add(oi)
-        if actual < requested:
-            item_name = batch.spec.brand.item.name if batch.spec and batch.spec.brand else '（品項）'
-            adjust_notes.append(f'{item_name}：申請 {requested} → 因庫存不足自動調整為 {actual}')
+        groups[spec_id]['requested'] += entry.get('adjusted_from', entry['qty'])
+
+    adjust_notes = []
+    for spec_id in order_keys:
+        spec = groups[spec_id]['spec']
+        total_requested = groups[spec_id]['requested']
+        if total_requested <= 0: continue
+
+        # 用送出當下最新的可用庫存，依到期日優先（FEFO）重新分配
+        batches = sorted(
+            spec.batches if spec else [],
+            key=lambda b: (b.expiry_date is None, b.expiry_date or date_type(9999, 12, 31))
+        )
+        remaining = total_requested
+        for batch in batches:
+            if remaining <= 0: break
+            take = min(remaining, batch.available_qty)
+            if take <= 0: continue
+            oi = OrderItem(order_id=order.id, batch_id=batch.id,
+                           qty_request=take, qty_actual=take)
+            db.session.add(oi)
+            remaining -= take
+
+        actual_total = total_requested - remaining
+        if actual_total < total_requested:
+            item_name = spec.brand.item.name if spec and spec.brand else '（品項）'
+            adjust_notes.append(f'{item_name}：申請 {total_requested} → 因庫存不足自動調整為 {actual_total}')
 
     if adjust_notes:
         order.system_note = '系統備註：' + '；'.join(adjust_notes) + '（此單為系統自動調整，建議優先確認補貨並留意送件先後順序）'

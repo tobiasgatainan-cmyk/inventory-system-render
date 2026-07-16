@@ -111,22 +111,22 @@
 
     {% if order.status == 'pending' %}
     <div class="adj-row">
+      {% set cur_opt = (oi._batch_options | selectattr('id', 'equalto', oi.batch_id) | first) %}
       <div>
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">實際出貨數量</label>
         <input type="number" name="qty_{{ oi.id }}" id="qty-{{ oi.id }}" value="{{ oi.qty_actual or oi.qty_request }}"
-               min="0" max="{{ oi.batch.qty }}" class="fi" style="width:80px"
+               min="0" max="{{ cur_opt.qty if cur_opt else oi.batch.qty }}" class="fi" style="width:80px"
                oninput="if(this.max && parseInt(this.value)>parseInt(this.max)) this.value=this.max;">
       </div>
       <div style="flex:1">
         <label style="font-size:11px;color:#a8958c;font-weight:600;display:block;margin-bottom:3px">
-          出貨批次 <span style="font-weight:400">（可換成更近到期的批次）</span>
+          出貨批次 <span style="font-weight:400">（可換成更近到期的批次；庫存已扣除此單其他品項的佔用）</span>
         </label>
         <select name="batch_{{ oi.id }}" id="batchSelect-{{ oi.id }}" class="fi" style="width:100%;max-width:380px"
                 onchange="onPrimaryBatchChange({{ oi.id }})">
-          {% for b in oi._available_batches %}
-          {% set days = (b.expiry_date - today).days if b.expiry_date else None %}
-          <option value="{{ b.id }}" data-qty="{{ b.qty }}" {% if b.id == oi.batch_id %}selected{% endif %}>
-            {{ b.spec.brand.name }}／{{ b.spec.name }}／到期：{% if b.expiry_date %}{{ b.expiry_date.isoformat() }}{% if days is not none %}（{% if days < 0 %}已過期{% elif days == 0 %}今天{% else %}{{ days }}天{% endif %}）{% endif %}{% else %}無{% endif %}／庫存 {{ b.qty }}
+          {% for opt in oi._batch_options %}
+          <option value="{{ opt.id }}" data-qty="{{ opt.qty }}" {% if opt.id == oi.batch_id %}selected{% endif %}>
+            {{ opt.label }}
           </option>
           {% endfor %}
         </select>

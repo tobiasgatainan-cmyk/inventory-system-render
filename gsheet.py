@@ -44,6 +44,44 @@ def _ensure_headers(ws, headers):
         ws.append_row(headers)
 
 
+def _ensure_headers_safe(ws, headers):
+    """確保表頭是最新版本；如果表頭有變動（例如中間新增了「單位」欄），
+    用「插入欄位」的方式處理，不會清空已經寫入的歷史資料列。
+    （只有這個函式能安全處理『在中間插入一欄』的情況，其餘結構差異太大時才會退回清空重建）"""
+    try:
+        first_row = ws.row_values(1)
+    except Exception:
+        first_row = []
+    if first_row == headers:
+        return
+    if not first_row:
+        # 全新／空白工作表，直接寫入表頭即可
+        ws.append_row(headers)
+        return
+    # 檢查是不是「新表頭只是在舊表頭中插入了一欄」，如果是，用插入欄位補上，
+    # 前後其餘欄位順序都要對得上才視為安全
+    if len(headers) == len(first_row) + 1:
+        insert_at = None
+        for i, h in enumerate(headers):
+            if i >= len(first_row) or first_row[i] != h:
+                insert_at = i
+                break
+        if insert_at is not None and headers[:insert_at] == first_row[:insert_at] \
+                and headers[insert_at + 1:] == first_row[insert_at:]:
+            col = insert_at + 1  # gspread 欄位索引為 1-based
+            try:
+                num_rows = len(ws.get_all_values())
+            except Exception:
+                num_rows = 1
+            num_rows = max(num_rows, 1)
+            new_col_values = [[headers[insert_at]] + [''] * (num_rows - 1)]
+            ws.insert_cols(new_col_values, col)
+            return
+    # 無法安全對應（結構差異太大），才退回舊的清空重建方式
+    ws.clear()
+    ws.append_row(headers)
+
+
 # ── Order sync（找到就覆蓋原本那一列，找不到才新增）────────
 def sync_order(order):
     ws = _sheet('申請單')
@@ -126,7 +164,7 @@ def full_sync():
     except Exception: pass
 
     now  = now_tw().strftime('%Y-%m-%d %H:%M')
-    rows = [['類別','品項','品牌','規格','批次ID','數量','安全庫存','到期日','供應商','進價','備註','最後同步']]
+    rows = [['類別','品項','品牌','規格','批次ID','數量','單位','安全庫存','到期日','供應商','進價','備註','最後同步']]
 
     for item in Item.query.join(Category, Item.category_id == Category.id, isouter=True)\
                           .order_by(Category.sort_order, Item.sort_order, Item.name).all():
@@ -141,6 +179,7 @@ def full_sync():
                 item.category.name if item.category else '',
                 item.name, brand.name, spec.name, batch.id,
                 batch.qty,
+                item.unit or '',
                 brand.safe_qty,
                 batch.expiry_date.isoformat() if batch.expiry_date else '',
                 batch.supplier or '',
@@ -161,7 +200,7 @@ def _build_log_row(batch, change, reason, username, applicant=''):
     item  = brand.item
     return {
         'sheet': '異動紀錄',
-        'headers': ['時間','類別','品項','品牌','規格','異動','申請人','原因','操作人'],
+        'headers': ['時間','類別','品項','品牌','規格','異動','單位','申請人','原因','操作人'],
         'row': [
             now,
             item.category.name if item.category else '',
@@ -169,6 +208,7 @@ def _build_log_row(batch, change, reason, username, applicant=''):
             brand.name,
             spec.name,
             f'+{change}' if change > 0 else str(change),
+            item.unit or '',
             applicant,
             reason,
             username,
@@ -184,13 +224,14 @@ def _build_purchase_row(batch, username):
     item  = brand.item
     return {
         'sheet': '歷史庫存比較',
-        'headers': ['時間','品項','品牌','規格','入庫數量','到期日','進價','供應商','備註','操作人'],
+        'headers': ['時間','品項','品牌','規格','入庫數量','單位','到期日','進價','供應商','備註','操作人'],
         'row': [
             now,
             item.name,
             brand.name,
             spec.name,
             batch.qty,
+            item.unit or '',
             batch.expiry_date.isoformat() if batch.expiry_date else '',
             float(batch.cost_price) if batch.cost_price else '',
             batch.supplier or '',
@@ -203,13 +244,7 @@ def _build_purchase_row(batch, username):
 def append_row_raw(built):
     """把 _build_log_row / _build_purchase_row 組好的內容真正寫進 Sheet"""
     ws = _sheet(built['sheet'])
-    try:
-        first_row = ws.row_values(1)
-    except Exception:
-        first_row = []
-    if first_row != built['headers']:
-        ws.clear()
-        ws.append_row(built['headers'])
+    _ensure_headers_safe(ws, built['headers'])
     ws.append_row(built['row'])
 
 

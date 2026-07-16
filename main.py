@@ -1175,6 +1175,18 @@ def admin_orders():
 def admin_order_detail(oid):
     order  = Order.query.get_or_404(oid)
     today  = now_tw().date()
+
+    # 這張申請單裡，每個批次目前總共被分配了多少（含每個品項的主批次與補足批次），
+    # 用來避免不同品項的下拉選單各自獨立顯示「原始庫存」，導致同一批次被重複分配、超賣。
+    claimed_by_batch = {}
+    def _claim(batch_id, qty):
+        if batch_id:
+            claimed_by_batch[batch_id] = claimed_by_batch.get(batch_id, 0) + (qty or 0)
+    for oi2 in order.items:
+        _claim(oi2.batch_id, oi2.qty_actual or oi2.qty_request or 0)
+        for s in oi2.splits:
+            _claim(s.batch_id, s.qty)
+
     # 取得每個品項可選的批次清單
     for oi in order.items:
         if not oi.batch:
@@ -1182,12 +1194,18 @@ def admin_order_detail(oid):
             oi._batch_options = []
             continue
         item = oi.batch.spec.brand.item
+        # 這個品項自己在各批次上佔用的量（主批次＋補足批次），算選單庫存時要逐批次排除，
+        # 不然會被自己的佔用量誤扣到
+        own_claim_by_batch = {}
+        own_claim_by_batch[oi.batch_id] = own_claim_by_batch.get(oi.batch_id, 0) + (oi.qty_actual or oi.qty_request or 0)
+        for s in oi.splits:
+            own_claim_by_batch[s.batch_id] = own_claim_by_batch.get(s.batch_id, 0) + s.qty
         # 找同品項下所有批次（依到期日排序）
         batches = []
         for brand in item.brands:
             for spec in brand.specs:
                 for b in spec.batches:
-                    if b.qty > 0:
+                    if b.qty > 0 or b.id == oi.batch_id:
                         batches.append(b)
         batches.sort(key=lambda b: (
             b.expiry_date is None,
@@ -1202,10 +1220,14 @@ def admin_order_detail(oid):
                     '（已過期）' if days < 0 else '（今天）' if days == 0 else f'（{days}天）')
             else:
                 exp_label = '無'
+            # 這張單裡其他品項已經佔用的量（扣掉自己這個品項在這個批次上的佔用，因為那本來就算在自己身上）
+            claimed_by_others = max(0, claimed_by_batch.get(b.id, 0) - own_claim_by_batch.get(b.id, 0))
+            remaining = max(0, b.qty - claimed_by_others)
             oi._batch_options.append({
                 'id': b.id,
-                'qty': b.qty,
-                'label': f'{b.spec.brand.name}／{b.spec.name}／到期：{exp_label}／庫存 {b.qty}',
+                'qty': remaining,
+                'label': f'{b.spec.brand.name}／{b.spec.name}／到期：{exp_label}／庫存 {remaining}'
+                         + ('（此單其他品項已占用部分庫存）' if claimed_by_others > 0 else ''),
             })
     return render_template('admin/order_detail.html', order=order, today=today)
 

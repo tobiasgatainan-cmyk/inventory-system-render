@@ -518,6 +518,21 @@ def admin_items():
                            today=today, today_30=today_30,
                            item_display_rows=item_display_rows)
 
+def _resolve_category_id(form):
+    """分類欄位下拉選單跟手動輸入新分類名稱並存：
+    如果有填新分類名稱，優先使用（沒有就新增一筆），否則才看下拉選單選了哪個既有分類"""
+    new_name = (form.get('new_category_name') or '').strip()
+    if new_name:
+        cat = Category.query.filter_by(name=new_name).first()
+        if not cat:
+            max_order = db.session.query(db.func.max(Category.sort_order)).scalar() or 0
+            cat = Category(name=new_name, sort_order=max_order + 1)
+            db.session.add(cat); db.session.flush()
+        return cat.id
+    cid = form.get('category_id')
+    return int(cid) if cid else None
+
+
 @app.route('/admin/items/add', methods=['GET', 'POST'])
 @login_required
 @editor_required
@@ -531,16 +546,26 @@ def admin_add_item():
             item = existing_item
             if request.form.get('unit'):
                 item.unit = request.form['unit']
-            if request.form.get('category_id'):
-                item.category_id = int(request.form['category_id'])
+            resolved_cat_id = _resolve_category_id(request.form)
+            if resolved_cat_id:
+                item.category_id = resolved_cat_id
             flash_msg = f'「{name}」已存在，新增的品牌已加入該品項'
         else:
             item = Item(name=name, unit=request.form['unit'],
-                        category_id=int(request.form['category_id']) if request.form['category_id'] else None)
+                        category_id=_resolve_category_id(request.form))
             db.session.add(item); db.session.flush()
             flash_msg = '品項新增成功'
-        _save_brands(item.id, request.form, is_edit=False)
+        new_stocked_batches = _save_brands(item.id, request.form, is_edit=False, log_user=current_user)
         db.session.commit(); flash(flash_msg, 'success')
+
+        from gsheet import _build_log_row, _build_purchase_row, append_row_raw, full_sync
+        for batch in new_stocked_batches:
+            log_built = _build_log_row(batch, batch.qty, '新增品項時設定初始庫存', current_user.username)
+            _sync_or_queue('append_row', lambda lb=log_built: append_row_raw(lb), payload=log_built)
+            purchase_built = _build_purchase_row(batch, current_user.username)
+            _sync_or_queue('append_row', lambda pb=purchase_built: append_row_raw(pb), payload=purchase_built)
+        if new_stocked_batches:
+            _sync_or_queue('full_inventory', full_sync)
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=None, cats=cats,
                            all_item_names=[i.name for i in Item.query.all()])
@@ -554,7 +579,7 @@ def admin_edit_item(iid):
     if request.method == 'POST':
         item.name        = request.form['name']
         item.unit        = request.form['unit']
-        item.category_id = int(request.form['category_id']) if request.form['category_id'] else None
+        item.category_id = _resolve_category_id(request.form)
 
         brand_ids     = request.form.getlist('brand_id[]')
         brand_names   = request.form.getlist('brand_name[]')
@@ -641,7 +666,7 @@ def admin_edit_item(iid):
         return redirect(url_for('admin_items'))
     return render_template('admin/item_form.html', item=item, cats=cats)
 
-def _save_brands(item_id, form, is_edit=False):
+def _save_brands(item_id, form, is_edit=False, log_user=None):
     brand_names    = form.getlist('brand_name[]')
     brand_safes    = form.getlist('brand_safe[]')
     spec_names     = form.getlist('spec_name[]')
@@ -651,6 +676,12 @@ def _save_brands(item_id, form, is_edit=False):
     spec_suppliers = form.getlist('spec_supplier[]')
     spec_notes     = form.getlist('spec_note[]')
     brand_indices  = form.getlist('spec_brand_index[]')
+
+    # 新增品項時，如果有帶初始庫存（qty>0），要建立的批次記得回傳給呼叫端，
+    # 讓「異動紀錄」「歷史庫存比較」跟 Google Sheet 也同步記一筆，
+    # 跟平常用「入庫」功能加庫存的效果一致，避免新增品項時直接設定的初始庫存
+    # 完全查不到異動軌跡
+    new_stocked_batches = []
 
     # 同一品項底下，同名品牌一律重複使用既有的（不管是這次表單裡重複輸入，
     # 還是資料庫裡本來就已經存在），避免產生重複品牌
@@ -706,6 +737,13 @@ def _save_brands(item_id, form, is_edit=False):
                           supplier=ssup.strip() or None,
                           note=snote.strip() or None)
             db.session.add(batch)
+            if qty > 0:
+                db.session.flush()  # 取得 batch.id，供 StockLog 關聯使用
+                log = StockLog(batch_id=batch.id, change=qty, reason='新增品項時設定初始庫存',
+                              user_id=log_user.id if log_user else None)
+                db.session.add(log)
+                new_stocked_batches.append(batch)
+    return new_stocked_batches
 
 @app.route('/admin/items/<int:iid>/delete', methods=['POST'])
 @login_required

@@ -1220,14 +1220,17 @@ def admin_order_detail(oid):
                     '（已過期）' if days < 0 else '（今天）' if days == 0 else f'（{days}天）')
             else:
                 exp_label = '無'
-            # 這張單裡其他品項已經佔用的量（扣掉自己這個品項在這個批次上的佔用，因為那本來就算在自己身上）
+            # 這張單裡其他品項是否已經佔用這個批次（扣掉自己這個品項在這個批次上的佔用，
+            # 因為那本來就算在自己身上）——只要其他品項佔用了，這個批次就整個不給選，
+            # 不做「部分庫存」這種細算，避免混淆
             claimed_by_others = max(0, claimed_by_batch.get(b.id, 0) - own_claim_by_batch.get(b.id, 0))
-            remaining = max(0, b.qty - claimed_by_others)
+            disabled = claimed_by_others > 0
             oi._batch_options.append({
                 'id': b.id,
-                'qty': remaining,
-                'label': f'{b.spec.brand.name}／{b.spec.name}／到期：{exp_label}／庫存 {remaining}'
-                         + ('（此單其他品項已占用部分庫存）' if claimed_by_others > 0 else ''),
+                'qty': 0 if disabled else b.qty,
+                'disabled': disabled,
+                'label': f'{b.spec.brand.name}／{b.spec.name}／到期：{exp_label}／庫存 {b.qty}'
+                         + ('（已被此單其他品項使用，不可選）' if disabled else ''),
             })
     return render_template('admin/order_detail.html', order=order, today=today)
 

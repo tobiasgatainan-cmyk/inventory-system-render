@@ -150,6 +150,78 @@ def sync_shortage(req):
         ws.append_row(row)
 
 
+# ── Bulk order / shortage sync（「同步至 Sheet」整批重新同步時用這個）───
+# 跟上面 sync_order／sync_shortage 的差別：那兩個是「單筆即時同步」用的
+# （新申請單送出、狀態變更時各自呼叫一次，頻率低，沒有額度問題）。
+# 這裡是「一次把全部歷史資料都重新同步一次」，如果還是每一筆各自查一次列號、
+# 各自呼叫一次 API，資料一多很容易在幾秒內把 Google Sheets API 每分鐘的讀取
+# 額度用完（429 Quota exceeded）。所以改成：整張表的索引只讀一次，
+# 更新／新增都用批次呼叫，把原本 O(N) 次讀取／寫入壓到幾乎固定次數。
+def _bulk_upsert(ws, headers, key_col_letter, rows_with_keys):
+    """rows_with_keys: [(key_value, row_values), ...]
+    key_col_letter 是主鍵欄位的欄位代號（例如 'A'）"""
+    _ensure_headers_safe(ws, headers)
+    try:
+        existing_keys = ws.col_values(1)  # 只讀一次，建立 key → 列號 的索引
+    except Exception:
+        existing_keys = []
+    row_index = {str(v): i + 1 for i, v in enumerate(existing_keys) if v}
+
+    last_col_letter = chr(ord('A') + len(headers) - 1)  # 假設欄位不超過 Z，本專案兩張表都遠少於此
+    batch_data = []
+    appends = []
+    for key_value, row in rows_with_keys:
+        row_num = row_index.get(str(key_value))
+        if row_num:
+            batch_data.append({'range': f'A{row_num}:{last_col_letter}{row_num}', 'values': [row]})
+        else:
+            appends.append(row)
+
+    if batch_data:
+        ws.batch_update(batch_data)
+    if appends:
+        ws.append_rows(appends)
+
+
+def sync_all_orders(orders):
+    ws = _sheet('申請單')
+    HEADERS = ['申請單號','申請人','狀態','品項摘要','申請人備註','管理員備註','申請時間','處理時間']
+    status_map = {'pending': '待處理', 'confirmed': '已出貨', 'cancelled': '已取消'}
+    rows_with_keys = []
+    for order in orders:
+        items_summary = '／'.join(f'{oi.item_name}×{oi.qty_request}' for oi in order.items)
+        row = [
+            order.order_no,
+            order.applicant,
+            status_map.get(order.status, order.status),
+            items_summary,
+            order.note or '',
+            order.admin_note or '',
+            order.created_at.strftime('%Y-%m-%d %H:%M'),
+            order.confirmed_at.strftime('%Y-%m-%d %H:%M') if order.confirmed_at else '',
+        ]
+        rows_with_keys.append((order.order_no, row))
+    _bulk_upsert(ws, HEADERS, 'A', rows_with_keys)
+
+
+def sync_all_shortage(reqs):
+    ws = _sheet('缺貨回報')
+    HEADERS = ['編號','品項名稱','申請人','需求說明','狀態','處理備註','回報時間']
+    rows_with_keys = []
+    for req in reqs:
+        row = [
+            req.id,
+            req.item_name,
+            req.applicant,
+            req.note or '',
+            '已處理' if req.resolved else '待處理',
+            req.handle_note or '',
+            req.created_at.strftime('%Y-%m-%d %H:%M'),
+        ]
+        rows_with_keys.append((req.id, row))
+    _bulk_upsert(ws, HEADERS, 'A', rows_with_keys)
+
+
 # ── Full sync ─────────────────────────────────────────────
 def _display_rows_for_item(item):
     """依「品牌名稱＋規格名稱」分組：同組有庫存只留有庫存的批次，

@@ -1527,14 +1527,14 @@ def _maybe_process_sync_queue():
 @editor_required
 def gsheet_sync():
     try:
-        from gsheet import full_sync, sync_order, sync_shortage
+        from gsheet import full_sync, sync_all_orders, sync_all_shortage
         result = full_sync()
         _record_sync_success()
         # 順便把所有申請單、缺貨回報都重新同步一次，補齊過去可能漏掉的
-        for order in Order.query.all():
-            sync_order(order)
-        for req in ShortageRequest.query.all():
-            sync_shortage(req)
+        # （這裡用整批的方式，避免一筆一筆各自呼叫 API，資料一多會超過
+        # Google Sheets API 每分鐘的讀取額度）
+        sync_all_orders(Order.query.all())
+        sync_all_shortage(ShortageRequest.query.all())
         # 排隊中的也一併清一清
         _process_sync_queue(limit=50)
         flash(f'Google Sheet 全面同步完成：{result}', 'success')

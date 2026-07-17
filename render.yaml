@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT main:app
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT --timeout 90 main:app
     envVars:
       - key: SECRET_KEY
         generateValue: true

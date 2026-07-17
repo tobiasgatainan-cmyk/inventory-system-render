@@ -13,15 +13,36 @@ SCOPES   = ['https://www.googleapis.com/auth/spreadsheets',
 SHEET_ID = os.environ.get('GOOGLE_SHEET_ID', '')
 SA_JSON  = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
 
+# 快取已驗證的 client／已開啟的試算表，同一個 process 內只做一次金鑰解析與開啟試算表，
+# 避免每次同步都重新解析 RSA 私鑰、重新呼叫 API 打開試算表（這在 Render 免費方案的
+# 記憶體限制下，密集同步時容易造成資源緊繃甚至被系統 SIGKILL）
+_gc_cache = None
+_sh_cache = None
+
 def _client():
-    if not SA_JSON: raise EnvironmentError('缺少 GOOGLE_SERVICE_ACCOUNT_JSON')
-    creds = Credentials.from_service_account_info(json.loads(SA_JSON), scopes=SCOPES)
-    return gspread.authorize(creds)
+    global _gc_cache
+    if _gc_cache is None:
+        if not SA_JSON: raise EnvironmentError('缺少 GOOGLE_SERVICE_ACCOUNT_JSON')
+        creds = Credentials.from_service_account_info(json.loads(SA_JSON), scopes=SCOPES)
+        _gc_cache = gspread.authorize(creds)
+    return _gc_cache
 
 def _sheet(tab):
-    gc = _client(); sh = gc.open_by_key(SHEET_ID)
-    try: return sh.worksheet(tab)
-    except gspread.WorksheetNotFound: return sh.add_worksheet(title=tab, rows=2000, cols=20)
+    global _gc_cache, _sh_cache
+    try:
+        if _sh_cache is None:
+            _sh_cache = _client().open_by_key(SHEET_ID)
+        sh = _sh_cache
+        try: return sh.worksheet(tab)
+        except gspread.WorksheetNotFound: return sh.add_worksheet(title=tab, rows=2000, cols=20)
+    except Exception:
+        # 快取的連線可能已經過期／失效，清掉快取重試一次，避免卡在壞掉的連線上
+        _gc_cache = None
+        _sh_cache = None
+        sh = _client().open_by_key(SHEET_ID)
+        _sh_cache = sh
+        try: return sh.worksheet(tab)
+        except gspread.WorksheetNotFound: return sh.add_worksheet(title=tab, rows=2000, cols=20)
 
 def _find_row(ws, key_value, key_col=1):
     """在該工作表第 key_col 欄（1-based）尋找等於 key_value 的列，回傳列號；找不到回傳 None"""

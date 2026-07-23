@@ -397,7 +397,7 @@ async function openSpecModal(itemId, btn){
             <div style="font-weight:600;font-size:13px">${s.spec}</div>
             <div style="font-size:11px;color:#a8958c">${s.brand} ／ 可申請 ${s.total}</div>
           </div>
-          <input type="number" id="spec-qty-${i}" value="1" min="0" max="${s.total}"
+          <input type="number" id="spec-qty-${i}" value="0" min="0" max="${s.total}"
             style="width:60px;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;text-align:center">
         </div>
       `).join('');

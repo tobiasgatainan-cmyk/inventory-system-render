@@ -95,6 +95,7 @@ class Item(db.Model):
     supplier    = db.Column(db.String(100))
     sort_order  = db.Column(db.Integer, default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
+    is_hidden   = db.Column(db.Boolean, default=False)  # 只有登入後台的人看得到，未登入的前台使用者看不到
     created_at  = db.Column(db.DateTime, default=now_tw)
     brands      = db.relationship('Brand', backref='item', lazy=True, cascade='all, delete-orphan')
 
@@ -365,6 +366,8 @@ def index():
     cat  = request.args.get('cat', '')
     cats = Category.query.order_by(Category.sort_order, Category.name).all()
     query = Item.query.join(Category, Item.category_id == Category.id, isouter=True)
+    if not current_user.is_authenticated:
+        query = query.filter(Item.is_hidden.isnot(True))
     if q:
         query = query.filter(Item.name.ilike(f'%{q}%'))
     if cat:
@@ -383,6 +386,8 @@ def index():
 def api_item_detail(iid):
     try:
         item  = Item.query.get_or_404(iid)
+        if item.is_hidden and not current_user.is_authenticated:
+            return jsonify({'error': '品項不存在'}), 404
         today = now_tw().date()
         result = []
         for brand in item.brands:
@@ -552,7 +557,8 @@ def admin_add_item():
             flash_msg = f'「{name}」已存在，新增的品牌已加入該品項'
         else:
             item = Item(name=name, unit=request.form['unit'],
-                        category_id=_resolve_category_id(request.form))
+                        category_id=_resolve_category_id(request.form),
+                        is_hidden=bool(request.form.get('is_hidden')))
             db.session.add(item); db.session.flush()
             flash_msg = '品項新增成功'
         new_stocked_batches = _save_brands(item.id, request.form, is_edit=False, log_user=current_user)
@@ -580,6 +586,7 @@ def admin_edit_item(iid):
         item.name        = request.form['name']
         item.unit        = request.form['unit']
         item.category_id = _resolve_category_id(request.form)
+        item.is_hidden   = bool(request.form.get('is_hidden'))
 
         brand_ids     = request.form.getlist('brand_id[]')
         brand_names   = request.form.getlist('brand_name[]')
@@ -1003,6 +1010,8 @@ def cart_add():
 
     item = Item.query.get(item_id)
     if not item:
+        return jsonify({'ok': False, 'msg': '品項不存在'})
+    if item.is_hidden and not current_user.is_authenticated:
         return jsonify({'ok': False, 'msg': '品項不存在'})
 
     # 收集符合條件的批次，依到期日排序（FEFO）
@@ -1641,6 +1650,7 @@ with app.app_context():
             for sql in [
                 "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
                 "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+                "ALTER TABLE items      ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_email VARCHAR(120)",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_on BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",

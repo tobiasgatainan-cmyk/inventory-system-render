@@ -111,6 +111,13 @@
       <label>單位（包、個、盒…）</label>
       <input type="text" name="unit" value="{{ item.unit if item else '' }}">
     </div>
+    <div class="form-group" style="grid-column:1/-1">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:0;cursor:pointer">
+        <input type="checkbox" name="is_hidden" value="1" {% if item and item.is_hidden %}checked{% endif %}
+               style="width:16px;height:16px;margin:0">
+        🔒 隱藏這個品項（前台未登入的使用者看不到，只有登入後台的人看得到）
+      </label>
+    </div>
   </div>
 
   <!-- Brands -->

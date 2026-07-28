@@ -229,7 +229,10 @@
         <tr data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}">
           {% if loop.first %}
           <td rowspan="{{ item_rows|length }}"><span class="cat-pill">{{ item.category.name if item.category else '—' }}</span></td>
-          <td rowspan="{{ item_rows|length }}" style="font-weight:600">{{ item.name }}</td>
+          <td rowspan="{{ item_rows|length }}" style="font-weight:600">
+            {{ item.name }}
+            {% if item.is_hidden %}<span style="background:#5a5550;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;vertical-align:middle">🔒 隱藏</span>{% endif %}
+          </td>
           {% endif %}
           <td style="font-size:12px;font-weight:600;color:var(--text2)">{{ row.brand.name }}</td>
           <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ row.spec.name }}</span></td>
@@ -256,7 +259,10 @@
         {% else %}
         <tr data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}">
           <td><span class="cat-pill">{{ item.category.name if item.category else '—' }}</span></td>
-          <td style="font-weight:600">{{ item.name }}</td>
+          <td style="font-weight:600">
+            {{ item.name }}
+            {% if item.is_hidden %}<span style="background:#5a5550;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;vertical-align:middle">🔒 隱藏</span>{% endif %}
+          </td>
           <td colspan="7" style="color:var(--text3);font-size:12px">尚無品牌／規格資料</td>
           <td>
             <div class="td-actions">

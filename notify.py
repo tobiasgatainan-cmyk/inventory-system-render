@@ -80,6 +80,7 @@ def send_order_notify(order):
       </div>
       <div style="background:#fff;padding:24px;border:1px solid #edddd0;border-top:none;border-radius:0 0 8px 8px">
         <p><strong>申請人：</strong>{order.applicant}</p>
+        {'<p><strong>申請單位：</strong>' + order.department + '</p>' if order.department else ''}
         <p><strong>申請時間：</strong>{order.created_at.strftime('%Y-%m-%d %H:%M')}</p>
         {'<p><strong>備註：</strong>' + order.note + '</p>' if order.note else ''}
         <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">

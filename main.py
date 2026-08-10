@@ -210,6 +210,15 @@ class SyncHealth(db.Model):
     alert_sent        = db.Column(db.Boolean, default=False)  # 這一波連續失敗是否已經寄過提醒信
 
 
+class DepartmentUnit(db.Model):
+    """申請購物車裡「單位名稱」下拉選單的選項，由編輯者以上的角色維護"""
+    __tablename__ = 'department_units'
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(50), unique=True, nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=now_tw)
+
+
 class ShortageRequest(db.Model):
     """前台申請人回報「缺貨」或「找不到需要的品項」"""
     __tablename__ = 'shortage_requests'
@@ -227,6 +236,7 @@ class Order(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
     order_no     = db.Column(db.String(20), unique=True, nullable=False)
     applicant    = db.Column(db.String(80), nullable=False)   # 申請人姓名
+    department   = db.Column(db.String(50), nullable=True)    # 申請人所屬單位（下拉選單選的，存文字，不做外鍵，避免單位改名／刪除影響歷史申請單）
     status       = db.Column(db.String(20), default='pending')
     # pending=待處理 / confirmed=已出貨 / cancelled=已取消
     note         = db.Column(db.String(300), nullable=True)
@@ -936,7 +946,8 @@ def cart():
                 'available':  batch.available_qty,
                 'qty':        entry['qty'],
             })
-    return render_template('cart.html', cart=items_detail, today=today, today_30=today_30)
+    units = DepartmentUnit.query.order_by(DepartmentUnit.sort_order, DepartmentUnit.name).all()
+    return render_template('cart.html', cart=items_detail, today=today, today_30=today_30, units=units)
 
 
 @app.route('/report_shortage', methods=['POST'])
@@ -1106,11 +1117,15 @@ def cart_clear():
 @app.route('/order/submit', methods=['POST'])
 def order_submit():
     applicant = request.form.get('applicant', '').strip()
+    department = request.form.get('department', '').strip()
     note      = request.form.get('note', '').strip()
     cart      = session.get('cart', [])
 
     if not applicant:
         flash('請填寫申請人姓名', 'danger')
+        return redirect(url_for('cart'))
+    if not department:
+        flash('請選擇申請單位', 'danger')
         return redirect(url_for('cart'))
     if not cart:
         flash('購物車是空的', 'danger')
@@ -1120,7 +1135,7 @@ def order_submit():
     ts       = now_tw().strftime('%Y%m%d%H%M%S')
     order_no = f'ORD-{ts}'
 
-    order = Order(order_no=order_no, applicant=applicant, note=note)
+    order = Order(order_no=order_no, applicant=applicant, department=department, note=note)
     db.session.add(order); db.session.flush()
 
     # 依「規格」分組（同一個規格底下可能有多個批次）。購物車裡個別批次的數量只是
@@ -1204,16 +1219,65 @@ def admin_orders():
     shortage_pending_count = ShortageRequest.query.filter_by(resolved=False).count()
     orders = []
     shortage_reqs = []
+    units = []
     if view == 'shortage':
         shortage_reqs = ShortageRequest.query.filter_by(resolved=(sr_status == 'resolved'))\
                                              .order_by(ShortageRequest.created_at.desc()).all()
+    elif view == 'units':
+        units = DepartmentUnit.query.order_by(DepartmentUnit.sort_order, DepartmentUnit.name).all()
     else:
         orders = Order.query.filter_by(status=status)\
                             .order_by(Order.created_at.desc()).all()
     return render_template('admin/orders.html', orders=orders, status=status,
                            pending_count=pending_count, view=view,
                            shortage_reqs=shortage_reqs, sr_status=sr_status,
-                           shortage_pending_count=shortage_pending_count)
+                           shortage_pending_count=shortage_pending_count,
+                           units=units)
+
+
+@app.route('/admin/units/add', methods=['POST'])
+@login_required
+@editor_required
+def admin_add_unit():
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('請輸入單位名稱', 'danger')
+    elif DepartmentUnit.query.filter_by(name=name).first():
+        flash(f'「{name}」已經存在', 'danger')
+    else:
+        max_order = db.session.query(db.func.max(DepartmentUnit.sort_order)).scalar() or 0
+        db.session.add(DepartmentUnit(name=name, sort_order=max_order + 1))
+        db.session.commit()
+        flash('單位新增成功', 'success')
+    return redirect(url_for('admin_orders', view='units'))
+
+
+@app.route('/admin/units/<int:uid>/rename', methods=['POST'])
+@login_required
+@editor_required
+def admin_rename_unit(uid):
+    unit = DepartmentUnit.query.get_or_404(uid)
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('請輸入單位名稱', 'danger')
+    elif DepartmentUnit.query.filter(DepartmentUnit.name == name, DepartmentUnit.id != uid).first():
+        flash(f'「{name}」已經存在', 'danger')
+    else:
+        unit.name = name
+        db.session.commit()
+        flash('已更新', 'success')
+    return redirect(url_for('admin_orders', view='units'))
+
+
+@app.route('/admin/units/<int:uid>/delete', methods=['POST'])
+@login_required
+@editor_required
+def admin_delete_unit(uid):
+    unit = DepartmentUnit.query.get_or_404(uid)
+    db.session.delete(unit)
+    db.session.commit()
+    flash('已刪除（過去用這個單位送出的申請單資料不受影響）', 'success')
+    return redirect(url_for('admin_orders', view='units'))
 
 
 @app.route('/admin/orders/<int:oid>')
@@ -1657,6 +1721,7 @@ with app.app_context():
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
                 "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS applicant VARCHAR(80)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS admin_note VARCHAR(300)",
+                "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS department VARCHAR(50)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS system_note VARCHAR(500)",
                 "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS split_batch_id INTEGER",
                 "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS split_qty INTEGER",

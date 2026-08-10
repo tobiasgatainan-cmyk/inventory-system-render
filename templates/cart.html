@@ -67,6 +67,16 @@ input[type=text]:focus,textarea:focus{border-color:#fe7b81}
     <h3 style="font-size:15px;font-weight:700;margin-bottom:16px">📝 填寫申請資料</h3>
     <form method="POST" action="{{ url_for('order_submit') }}" id="checkoutForm">
       <div class="form-group">
+        <label>申請單位 *</label>
+        <select name="department" required>
+          <option value="">請選擇單位</option>
+          {% for u in units %}
+          <option value="{{ u.name }}">{{ u.name }}</option>
+          {% endfor %}
+        </select>
+        {% if not units %}<div style="font-size:11px;color:#d97b2a;margin-top:4px">目前還沒有設定任何單位，請聯絡管理員到後台新增</div>{% endif %}
+      </div>
+      <div class="form-group">
         <label>申請人姓名 *</label>
         <input type="text" name="applicant" required placeholder="請填寫您的姓名">
       </div>

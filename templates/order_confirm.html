@@ -21,6 +21,7 @@
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px">
       <div><span style="color:#a8958c">申請人：</span><strong>{{ order.applicant }}</strong></div>
+      {% if order.department %}<div><span style="color:#a8958c">申請單位：</span><strong>{{ order.department }}</strong></div>{% endif %}
       <div><span style="color:#a8958c">申請時間：</span>{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
     </div>
     {% if order.note %}

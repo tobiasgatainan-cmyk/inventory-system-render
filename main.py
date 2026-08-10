@@ -1252,6 +1252,25 @@ def admin_add_unit():
     return redirect(url_for('admin_orders', view='units'))
 
 
+@app.route('/admin/units/<int:uid>/move', methods=['POST'])
+@login_required
+@editor_required
+def admin_move_unit(uid):
+    direction = request.form.get('direction')
+    units = DepartmentUnit.query.order_by(DepartmentUnit.sort_order, DepartmentUnit.name).all()
+    idx = next((i for i, u in enumerate(units) if u.id == uid), None)
+    if idx is not None:
+        swap_idx = idx - 1 if direction == 'up' else idx + 1
+        if 0 <= swap_idx < len(units):
+            units[idx], units[swap_idx] = units[swap_idx], units[idx]
+            # 依交換後的新順序，重新整批編號，確保不會因為原本的 sort_order 有重複值
+            # （例如都還是預設的 0）而交換了卻沒有實際效果
+            for i, u in enumerate(units):
+                u.sort_order = i
+            db.session.commit()
+    return redirect(url_for('admin_orders', view='units'))
+
+
 @app.route('/admin/units/<int:uid>/rename', methods=['POST'])
 @login_required
 @editor_required

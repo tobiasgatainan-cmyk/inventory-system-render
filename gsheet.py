@@ -106,15 +106,15 @@ def _ensure_headers_safe(ws, headers):
 # ── Order sync（找到就覆蓋原本那一列，找不到才新增）────────
 def sync_order(order):
     ws = _sheet('申請單')
-    HEADERS = ['申請單號','申請人','單位','狀態','品項摘要','申請人備註','管理員備註','申請時間','處理時間']
+    HEADERS = ['申請單號','單位','申請人','狀態','品項摘要','申請人備註','管理員備註','申請時間','處理時間']
     _ensure_headers_safe(ws, HEADERS)
 
     status_map = {'pending': '待處理', 'confirmed': '已出貨', 'cancelled': '已取消'}
     items_summary = '／'.join(f'{oi.item_name}×{oi.qty_request}' for oi in order.items)
     row = [
         order.order_no,
-        order.applicant,
         order.department or '',
+        order.applicant,
         status_map.get(order.status, order.status),
         items_summary,
         order.note or '',
@@ -186,15 +186,15 @@ def _bulk_upsert(ws, headers, key_col_letter, rows_with_keys):
 
 def sync_all_orders(orders):
     ws = _sheet('申請單')
-    HEADERS = ['申請單號','申請人','單位','狀態','品項摘要','申請人備註','管理員備註','申請時間','處理時間']
+    HEADERS = ['申請單號','單位','申請人','狀態','品項摘要','申請人備註','管理員備註','申請時間','處理時間']
     status_map = {'pending': '待處理', 'confirmed': '已出貨', 'cancelled': '已取消'}
     rows_with_keys = []
     for order in orders:
         items_summary = '／'.join(f'{oi.item_name}×{oi.qty_request}' for oi in order.items)
         row = [
             order.order_no,
-            order.applicant,
             order.department or '',
+            order.applicant,
             status_map.get(order.status, order.status),
             items_summary,
             order.note or '',

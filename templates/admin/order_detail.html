@@ -55,6 +55,12 @@
       <span class="info-label">申請人</span>
       <span class="info-value">{{ order.applicant }}</span>
     </div>
+    {% if order.department %}
+    <div class="info-row">
+      <span class="info-label">申請單位</span>
+      <span class="info-value">{{ order.department }}</span>
+    </div>
+    {% endif %}
     <div class="info-row">
       <span class="info-label">申請時間</span>
       <span class="info-value">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>

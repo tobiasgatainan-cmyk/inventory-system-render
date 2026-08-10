@@ -35,9 +35,43 @@
      class="stab {% if view=='orders' %}active{% endif %}">📋 申請單</a>
   <a href="{{ url_for('admin_orders', view='shortage') }}"
      class="stab {% if view=='shortage' %}active{% endif %}">📢 缺貨回報</a>
+  <a href="{{ url_for('admin_orders', view='units') }}"
+     class="stab {% if view=='units' %}active{% endif %}">🏢 單位管理</a>
 </div>
 
-{% if view == 'shortage' %}
+{% if view == 'units' %}
+
+<div class="card" style="max-width:480px">
+  <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">＋ 新增單位</h3>
+  <form method="POST" action="{{ url_for('admin_add_unit') }}" style="display:flex;gap:8px">
+    <input type="text" name="name" class="fi" style="flex:1" placeholder="例如：總務組、社工組…" required>
+    <button type="submit" class="btn-sm btn-primary">新增</button>
+  </form>
+</div>
+
+{% if units %}
+<div class="card" style="max-width:480px;padding:0;overflow:hidden">
+  {% for u in units %}
+  <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #f0e0e0">
+    <form method="POST" action="{{ url_for('admin_rename_unit', uid=u.id) }}" style="display:flex;gap:8px;flex:1">
+      <input type="text" name="name" value="{{ u.name }}" class="fi" style="flex:1">
+      <button type="submit" class="btn-sm btn-secondary">儲存</button>
+    </form>
+    <form method="POST" action="{{ url_for('admin_delete_unit', uid=u.id) }}"
+          onsubmit="return confirm('確定刪除「{{ u.name }}」這個單位？（過去用這個單位送出的申請單資料不受影響，只是這個選項以後不會再出現在下拉選單裡）')">
+      <button type="submit" class="btn-sm" style="background:#f8d7da;color:#721c24">刪除</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div style="font-size:40px;margin-bottom:12px">🏢</div>
+  <div>目前還沒有設定任何單位，前台申請購物車的單位選單會是空的</div>
+</div>
+{% endif %}
+
+{% elif view == 'shortage' %}
 
 <div class="status-tabs" style="margin-bottom:16px">
   <a href="{{ url_for('admin_orders', view='shortage', sr_status='pending') }}"
@@ -114,7 +148,7 @@
     </div>
     <span class="order-time">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
   </div>
-  <div class="order-applicant">👤 {{ order.applicant }}</div>
+  <div class="order-applicant">👤 {{ order.applicant }}{% if order.department %} <span style="font-weight:400;font-size:12px;color:#a8958c">／ 🏢 {{ order.department }}</span>{% endif %}</div>
   <div class="order-items-preview">
     {% for oi in order.items %}
     {{ oi.item_name }} × {{ oi.qty_request }}{% if not loop.last %} ／ {% endif %}

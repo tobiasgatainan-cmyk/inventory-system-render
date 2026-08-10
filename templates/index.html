@@ -48,6 +48,8 @@
 .item-card{background:var(--surface);border:3px solid #8ecaaa;border-radius:var(--radius-lg);padding:14px;transition:.15s;position:relative;cursor:pointer}
 .item-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.08)}
 .item-card.low-stock{border-color:#f0b87a}.item-card.out-stock{border-color:#e89499}
+.item-card.hidden-item{background:#e5e3e0}
+.hidden-badge{position:absolute;top:10px;right:10px;background:#5a5550;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600}
 .item-card-cat{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:6px}
 .item-card-name{font-size:15px;font-weight:700;letter-spacing:-.3px}
 .item-card-header{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
@@ -151,9 +153,10 @@
     <div class="item-grid" id="itemGrid">
       {% for item in items %}
       {% set st = item.status %}
-      <div class="item-card {% if st=='out' %}out-stock{% elif st=='low' %}low-stock{% endif %}"
+      <div class="item-card {% if st=='out' %}out-stock{% elif st=='low' %}low-stock{% endif %} {% if item.is_hidden %}hidden-item{% endif %}"
            data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}"
            data-status="{{ st }}" data-id="{{ item.id }}" onclick="toggleExpand(this)">
+        {% if item.is_hidden %}<span class="hidden-badge">🔒 隱藏</span>{% endif %}
         <div class="sdot {% if st=='out' %}sout{% elif st=='low' %}slow{% else %}sok{% endif %}"></div>
         <div class="item-card-cat">🏷️ {{ item.category.name if item.category else '未分類' }}</div>
         <div class="item-card-header">
@@ -397,7 +400,7 @@ async function openSpecModal(itemId, btn){
             <div style="font-weight:600;font-size:13px">${s.spec}</div>
             <div style="font-size:11px;color:#a8958c">${s.brand} ／ 可申請 ${s.total}</div>
           </div>
-          <input type="number" id="spec-qty-${i}" value="0" min="0" max="${s.total}"
+          <input type="number" id="spec-qty-${i}" value="1" min="0" max="${s.total}"
             style="width:60px;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;text-align:center">
         </div>
       `).join('');

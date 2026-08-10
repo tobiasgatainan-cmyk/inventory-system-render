@@ -53,6 +53,20 @@
 <div class="card" style="max-width:480px;padding:0;overflow:hidden">
   {% for u in units %}
   <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #f0e0e0">
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <form method="POST" action="{{ url_for('admin_move_unit', uid=u.id) }}">
+        <input type="hidden" name="direction" value="up">
+        <button type="submit" class="btn-sm btn-secondary"
+                style="padding:2px 8px{% if loop.first %};opacity:.3;cursor:default{% endif %}"
+                {% if loop.first %}disabled{% endif %}>▲</button>
+      </form>
+      <form method="POST" action="{{ url_for('admin_move_unit', uid=u.id) }}">
+        <input type="hidden" name="direction" value="down">
+        <button type="submit" class="btn-sm btn-secondary"
+                style="padding:2px 8px{% if loop.last %};opacity:.3;cursor:default{% endif %}"
+                {% if loop.last %}disabled{% endif %}>▼</button>
+      </form>
+    </div>
     <form method="POST" action="{{ url_for('admin_rename_unit', uid=u.id) }}" style="display:flex;gap:8px;flex:1">
       <input type="text" name="name" value="{{ u.name }}" class="fi" style="flex:1">
       <button type="submit" class="btn-sm btn-secondary">儲存</button>

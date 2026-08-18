@@ -571,8 +571,12 @@ def admin_add_item():
                         is_hidden=bool(request.form.get('is_hidden')))
             db.session.add(item); db.session.flush()
             flash_msg = '品項新增成功'
-        new_stocked_batches = _save_brands(item.id, request.form, is_edit=False, log_user=current_user)
-        db.session.commit(); flash(flash_msg, 'success')
+        new_stocked_batches, skipped_warnings = _save_brands(item.id, request.form, is_edit=False, log_user=current_user)
+        db.session.commit()
+        if skipped_warnings:
+            flash(flash_msg + '，但以下品牌有資料填了數量／到期日等欄位、卻沒有填「規格名稱」，這幾筆已被忽略沒有存入，請回來補填規格名稱：' + '、'.join(skipped_warnings), 'warning')
+        else:
+            flash(flash_msg, 'success')
 
         from gsheet import _build_log_row, _build_purchase_row, append_row_raw, full_sync
         for batch in new_stocked_batches:
@@ -699,6 +703,7 @@ def _save_brands(item_id, form, is_edit=False, log_user=None):
     # 跟平常用「入庫」功能加庫存的效果一致，避免新增品項時直接設定的初始庫存
     # 完全查不到異動軌跡
     new_stocked_batches = []
+    skipped_warnings = []  # 規格名稱空白、但其他欄位有填資料的列，回傳給呼叫端提醒使用者
 
     # 同一品項底下，同名品牌一律重複使用既有的（不管是這次表單裡重複輸入，
     # 還是資料庫裡本來就已經存在），避免產生重複品牌
@@ -722,7 +727,22 @@ def _save_brands(item_id, form, is_edit=False, log_user=None):
     spec_name_map = {}
     for si, (sname, sqty, sexp, scost, ssup, snote, bidx) in enumerate(
             zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_suppliers, spec_notes, brand_indices)):
-        if not sname.strip(): continue
+        if not sname.strip():
+            # 規格名稱是空的：如果其他欄位（數量、到期日、進價、供應商、備註）
+            # 也都是空的，代表這只是使用者多按了「＋新增規格」但沒用到的空白列，忽略即可；
+            # 但只要其他欄位「有任何一個」填了資料，就代表使用者是真的想新增這筆，
+            # 只是忘記填規格名稱——這種情況以前會被默默丟掉、庫存憑空消失，
+            # 現在要記下來回報給使用者，而不是直接跳過
+            try: has_other_data = bool(sqty and int(sqty) > 0) or bool(sexp.strip()) or \
+                                   bool(scost.strip()) or bool(ssup.strip()) or bool(snote.strip())
+            except (ValueError, TypeError):
+                has_other_data = True
+            if has_other_data:
+                try: bidx_int = int(bidx)
+                except (ValueError, TypeError): bidx_int = None
+                brand_name = brands_created[bidx_int].name if bidx_int is not None and bidx_int < len(brands_created) else '（未知品牌）'
+                skipped_warnings.append(brand_name)
+            continue
         try: bidx = int(bidx)
         except (ValueError, TypeError): bidx = 0
         if bidx >= len(brands_created): continue
@@ -760,7 +780,7 @@ def _save_brands(item_id, form, is_edit=False, log_user=None):
                               user_id=log_user.id if log_user else None)
                 db.session.add(log)
                 new_stocked_batches.append(batch)
-    return new_stocked_batches
+    return new_stocked_batches, skipped_warnings
 
 @app.route('/admin/items/<int:iid>/delete', methods=['POST'])
 @login_required

@@ -251,5 +251,29 @@ function removeSpec(btn) {
   if (list.querySelectorAll('.spec-row').length <= 1) { alert('至少需要一個規格'); return; }
   btn.closest('.spec-row').remove();
 }
+
+// 送出前檢查：如果某一列規格的「數量／到期日／進價／供應商／備註」有填任何一個，
+// 但「規格名稱」卻是空的，代表這筆資料會因為沒有規格名稱而整筆被忽略、庫存憑空消失。
+// 攔下來提醒使用者補填，而不是讓資料默默不見。
+document.getElementById('itemForm').addEventListener('submit', function(e){
+  const rows = document.querySelectorAll('.spec-row');
+  for (const row of rows) {
+    const nameInput = row.querySelector('input[name="spec_name[]"]');
+    if (nameInput && nameInput.value.trim()) continue;  // 有填名稱，沒問題
+    const otherInputs = row.querySelectorAll(
+      'input[name="spec_qty[]"], input[name="spec_expiry[]"], input[name="spec_cost[]"], ' +
+      'input[name="spec_supplier[]"], input[name="spec_note[]"]');
+    const hasOtherData = [...otherInputs].some(inp => {
+      if (inp.type === 'number') return parseFloat(inp.value) > 0;
+      return inp.value.trim() !== '';
+    });
+    if (hasOtherData) {
+      e.preventDefault();
+      alert('有一列規格填了數量／到期日等資料，但「規格名稱」是空的，請先補上規格名稱再送出，不然這筆資料不會被存進去。');
+      nameInput.focus();
+      return;
+    }
+  }
+});
 </script>
 {% endblock %}

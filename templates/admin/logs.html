@@ -21,7 +21,7 @@
 </div>
 
 <div class="card" style="padding:0;overflow-x:auto">
-<table style="min-width:800px" id="logTable">
+<table style="min-width:960px" id="logTable">
   <thead>
     <tr>
       <th>時間</th>
@@ -45,6 +45,14 @@
         <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'type')">▾</button>
         <div class="fpanel" id="fpanel-type" onclick="event.stopPropagation()"></div>
       </th>
+      <th class="filterable" data-col="unit">單位
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'unit')">▾</button>
+        <div class="fpanel" id="fpanel-unit" onclick="event.stopPropagation()"></div>
+      </th>
+      <th class="filterable" data-col="department">申請單位
+        <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'department')">▾</button>
+        <div class="fpanel" id="fpanel-department" onclick="event.stopPropagation()"></div>
+      </th>
       <th class="filterable" data-col="applicant">申請人
         <button type="button" class="ffbtn" onclick="toggleFilterPanel(event,'applicant')">▾</button>
         <div class="fpanel" id="fpanel-applicant" onclick="event.stopPropagation()"></div>
@@ -66,10 +74,13 @@
   {% set brand_name = brand.name if brand else '－' %}
   {% set spec_name = spec.name if spec else '－' %}
   {% set applicant_name = log.applicant or '－' %}
+  {% set department_name = log.department or '－' %}
+  {% set unit_name = item.unit if item and item.unit else '－' %}
   {% set user_name = log.user.username if log.user else '－' %}
   {% set type_label = '入庫' if log.change > 0 else '出庫' %}
   <tr data-cat="{{ cat_name }}" data-item="{{ item_name }}" data-brand="{{ brand_name }}" data-spec="{{ spec_name }}"
-      data-type="{{ type_label }}" data-applicant="{{ applicant_name }}" data-user="{{ user_name }}"
+      data-type="{{ type_label }}" data-unit="{{ unit_name }}" data-department="{{ department_name }}"
+      data-applicant="{{ applicant_name }}" data-user="{{ user_name }}"
       data-search="{{ (log.reason or '')|lower }}" data-date="{{ log.created_at.strftime('%Y-%m-%d') }}"
       style="background:{% if log.change > 0 %}rgba(74,158,107,.06){% else %}rgba(254,123,129,.06){% endif %}">
     <td style="font-size:12px;color:#aaa;white-space:nowrap">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
@@ -84,12 +95,14 @@
         {{ '+' if log.change > 0 else '' }}{{ log.change }}
       </span>
     </td>
+    <td style="font-size:12px;color:#666">{{ unit_name }}</td>
+    <td style="font-size:12px;color:#666">{{ department_name }}</td>
     <td style="font-size:12px;color:#666">{{ applicant_name }}</td>
     <td style="font-size:12px;color:#666">{{ log.reason or '－' }}</td>
     <td style="font-size:12px">{{ user_name }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="9" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
+  <tr><td colspan="11" style="text-align:center;color:#aaa;padding:24px">尚無紀錄</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -111,7 +124,7 @@ th.filter-active .ffbtn{color:#fe7b81;font-weight:900}
 </style>
 
 <script>
-const FILTER_COLS = ['cat','item','brand','spec','type','applicant','user'];
+const FILTER_COLS = ['cat','item','brand','spec','type','unit','department','applicant','user'];
 const uncheckedValues = {};
 FILTER_COLS.forEach(c => uncheckedValues[c] = new Set());
 

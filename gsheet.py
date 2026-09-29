@@ -287,7 +287,7 @@ def full_sync():
 
 
 # ── Append log row ────────────────────────────────────────
-def _build_log_row(batch, change, reason, username, applicant=''):
+def _build_log_row(batch, change, reason, username, applicant='', department=''):
     """組出異動紀錄要寫入的內容（不含寫入動作），供正常寫入與失敗後補寫共用"""
     now   = now_tw().strftime('%Y-%m-%d %H:%M:%S')
     spec  = batch.spec
@@ -295,7 +295,7 @@ def _build_log_row(batch, change, reason, username, applicant=''):
     item  = brand.item
     return {
         'sheet': '異動紀錄',
-        'headers': ['時間','類別','品項','品牌','規格','異動','單位','申請人','原因','操作人'],
+        'headers': ['時間','類別','品項','品牌','規格','異動','單位','申請單位','申請人','原因','操作人'],
         'row': [
             now,
             item.category.name if item.category else '',
@@ -304,6 +304,7 @@ def _build_log_row(batch, change, reason, username, applicant=''):
             spec.name,
             f'+{change}' if change > 0 else str(change),
             item.unit or '',
+            department,
             applicant,
             reason,
             username,
@@ -343,9 +344,9 @@ def append_row_raw(built):
     ws.append_row(built['row'])
 
 
-def append_log_row(batch, change, reason, username, applicant=''):
+def append_log_row(batch, change, reason, username, applicant='', department=''):
     """修復：每次都確認標題列，然後在最後一行後 append"""
-    append_row_raw(_build_log_row(batch, change, reason, username, applicant))
+    append_row_raw(_build_log_row(batch, change, reason, username, applicant, department))
 
 
 # ── Append purchase record ────────────────────────────────

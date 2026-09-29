@@ -180,6 +180,7 @@ class StockLog(db.Model):
     batch_id   = db.Column(db.Integer, db.ForeignKey('batches.id'))
     change     = db.Column(db.Integer)
     applicant  = db.Column(db.String(80))    # 申請人
+    department = db.Column(db.String(50))    # 申請單位（存文字，不做外鍵，避免單位改名／刪除影響歷史紀錄）
     reason     = db.Column(db.String(200))   # 原因
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=now_tw)
@@ -528,10 +529,11 @@ def admin_items():
             rows.extend(nonzero if nonzero else grp[:1])
         item_display_rows[item.id] = rows
 
+    units = DepartmentUnit.query.order_by(DepartmentUnit.sort_order, DepartmentUnit.name).all()
     return render_template('admin/items.html', items=items, cats=cats,
                            recent_logs=recent_logs,
                            today=today, today_30=today_30,
-                           item_display_rows=item_display_rows)
+                           item_display_rows=item_display_rows, units=units)
 
 def _resolve_category_id(form):
     """分類欄位下拉選單跟手動輸入新分類名稱並存：
@@ -856,6 +858,7 @@ def stock_out():
     batch_id  = int(request.form['batch_id'])
     qty       = int(request.form['qty'])
     applicant = request.form.get('applicant', '').strip()
+    department = request.form.get('department', '').strip()
     reason    = request.form.get('reason', '').strip()
 
     batch = Batch.query.get_or_404(batch_id)
@@ -868,11 +871,12 @@ def stock_out():
         batch.expiry_date = None
         batch.cost_price  = None
         batch.note        = None
-    log = StockLog(batch_id=batch_id, change=-qty, applicant=applicant, reason=reason, user_id=current_user.id)
+    log = StockLog(batch_id=batch_id, change=-qty, applicant=applicant, department=department,
+                   reason=reason, user_id=current_user.id)
     db.session.add(log); db.session.commit()
 
     from gsheet import _build_log_row, append_row_raw, full_sync
-    log_built = _build_log_row(batch, -qty, reason, current_user.username, applicant=applicant)
+    log_built = _build_log_row(batch, -qty, reason, current_user.username, applicant=applicant, department=department)
     _sync_or_queue('append_row', lambda: append_row_raw(log_built), payload=log_built)
     _sync_or_queue('full_inventory', full_sync)
 
@@ -1449,11 +1453,12 @@ def admin_order_confirm(oid):
             batch.cost_price  = None
             batch.note        = None
         log = StockLog(batch_id=batch.id, change=-qty,
-                       applicant=order.applicant, reason=order_reason,
+                       applicant=order.applicant, department=order.department, reason=order_reason,
                        user_id=current_user.id)
         db.session.add(log)
         from gsheet import _build_log_row
-        pending_log_rows.append(_build_log_row(batch, -qty, order_reason, current_user.username, applicant=order.applicant))
+        pending_log_rows.append(_build_log_row(batch, -qty, order_reason, current_user.username,
+                                               applicant=order.applicant, department=order.department))
         return None
 
     for oi in order.items:
@@ -1759,6 +1764,7 @@ with app.app_context():
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
                 "ALTER TABLE batches    ADD COLUMN IF NOT EXISTS supplier VARCHAR(100)",
                 "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS applicant VARCHAR(80)",
+                "ALTER TABLE stock_logs ADD COLUMN IF NOT EXISTS department VARCHAR(50)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS admin_note VARCHAR(300)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS department VARCHAR(50)",
                 "ALTER TABLE orders     ADD COLUMN IF NOT EXISTS system_note VARCHAR(500)",

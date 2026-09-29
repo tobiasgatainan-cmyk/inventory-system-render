@@ -19,6 +19,11 @@ def now_tw():
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///inventory.db')
 if DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+# 改用 psycopg（v3）驅動而不是預設的 psycopg2：psycopg2-binary 對近期 Python 版本的
+# 預編譯套件支援一直不太穩定，之前在 Render 上反覆出現「明明裝成功卻 import 失敗」
+# 的狀況；psycopg(v3) 是比較新、持續維護、Python 3.12+ 相容性更可靠的版本
+if DATABASE_URL.startswith('postgresql://'):
+    DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+psycopg://', 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False

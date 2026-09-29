@@ -3,6 +3,6 @@ gunicorn
 Flask-SQLAlchemy
 Flask-Login
 Werkzeug
-psycopg2-binary
+psycopg[binary]
 gspread
 google-auth

@@ -91,13 +91,22 @@
     </div>
     <div class="form-row-2" style="margin-top:12px">
       <div class="fc">
+        <label class="fl">申請單位</label>
+        <select class="fi" id="outDepartment">
+          <option value="">請選擇單位</option>
+          {% for u in units %}
+          <option value="{{ u.name }}">{{ u.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="fc">
         <label class="fl">申請人</label>
         <input type="text" class="fi" id="outApplicant" placeholder="姓名">
       </div>
-      <div class="fc">
-        <label class="fl">原因</label>
-        <input type="text" class="fi" id="outReason" placeholder="原因（選填）">
-      </div>
+    </div>
+    <div class="fc" style="margin-top:12px">
+      <label class="fl">原因</label>
+      <input type="text" class="fi" id="outReason" placeholder="原因（選填）">
     </div>
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
       <button onclick="closeOutModal()" style="padding:8px 16px;border:1px solid var(--border);background:white;border-radius:var(--radius);cursor:pointer;font-size:13px">取消</button>
@@ -109,6 +118,7 @@
   <input type="hidden" name="batch_id" id="outBatchId">
   <input type="hidden" name="qty"      id="outQtyHidden">
   <input type="hidden" name="applicant" id="outApplicantHidden">
+  <input type="hidden" name="department" id="outDepartmentHidden">
   <input type="hidden" name="reason"   id="outReasonHidden">
 </form>
 
@@ -400,6 +410,7 @@ function submitOut(){
   document.getElementById('outBatchId').value=sel.value;
   document.getElementById('outQtyHidden').value=qty;
   document.getElementById('outApplicantHidden').value=document.getElementById('outApplicant').value;
+  document.getElementById('outDepartmentHidden').value=document.getElementById('outDepartment').value;
   document.getElementById('outReasonHidden').value=document.getElementById('outReason').value;
   document.getElementById('outForm').submit();
   closeOutModal();

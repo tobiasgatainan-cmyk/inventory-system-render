@@ -245,7 +245,10 @@
           </td>
           {% endif %}
           <td style="font-size:12px;font-weight:600;color:var(--text2)">{{ row.brand.name }}</td>
-          <td><span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ row.spec.name }}</span></td>
+          <td>
+            <span style="background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:6px;font-size:12px">{{ row.spec.name }}</span>
+            {% if row.spec.is_hidden %}<span style="background:#5a5550;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px;vertical-align:middle">🔒 隱藏</span>{% endif %}
+          </td>
           <td><span class="qty-num" style="color:{% if qs=='out' %}var(--out){% elif qs=='low' %}var(--low){% else %}var(--ok){% endif %}">{{ batch.qty }}</span></td>
           <td style="font-size:12px;color:{% if exp_status=='out' %}var(--out){% elif exp_status=='low' %}var(--low){% else %}var(--text3){% endif %}">
             {{ batch.expiry_date.strftime('%Y-%m-%d') if batch.expiry_date else '—' }}

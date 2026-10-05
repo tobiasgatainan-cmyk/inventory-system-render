@@ -30,6 +30,13 @@
     現有 {{ spec.total_qty }} {{ item.unit }}（{{ spec.batches|length }} 批次）
   </span>
   {% endif %}
+  <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b5a52;white-space:nowrap;cursor:pointer;margin:0">
+    <input type="checkbox" onchange="this.nextElementSibling.value = this.checked ? '1' : '0'"
+           {% if spec and spec.is_hidden %}checked{% endif %}
+           style="width:14px;height:14px;margin:0">
+    <input type="hidden" name="spec_hidden[]" value="{{ '1' if spec and spec.is_hidden else '0' }}">
+    🔒 隱藏
+  </label>
   <button type="button" onclick="removeSpec(this)"
     style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
 </div>
@@ -216,6 +223,12 @@ function addBrand() {
           <input type="text" name="spec_name[]" placeholder="規格名稱"
                  style="flex:2;min-width:100px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
           ${specFieldsHTML(!isEdit)}
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b5a52;white-space:nowrap;cursor:pointer;margin:0">
+            <input type="checkbox" onchange="this.nextElementSibling.value = this.checked ? '1' : '0'"
+                   style="width:14px;height:14px;margin:0">
+            <input type="hidden" name="spec_hidden[]" value="0">
+            🔒 隱藏
+          </label>
           <button type="button" onclick="removeSpec(this)"
             style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
         </div>
@@ -240,6 +253,12 @@ function addSpec(btn, brandIdx, showFields) {
     <input type="text" name="spec_name[]" placeholder="規格名稱"
            style="flex:2;min-width:100px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
     ${specFieldsHTML(showFields)}
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b5a52;white-space:nowrap;cursor:pointer;margin:0">
+      <input type="checkbox" onchange="this.nextElementSibling.value = this.checked ? '1' : '0'"
+             style="width:14px;height:14px;margin:0">
+      <input type="hidden" name="spec_hidden[]" value="0">
+      🔒 隱藏
+    </label>
     <button type="button" onclick="removeSpec(this)"
       style="padding:5px 9px;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:7px;font-size:12px;cursor:pointer">✕</button>
   </div>`;

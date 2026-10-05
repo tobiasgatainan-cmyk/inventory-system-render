@@ -7,7 +7,7 @@
 {% set low_count = namespace(v=0) %}
 {% set out_count = namespace(v=0) %}
 {% for item in items %}
-  {% set s = item.status %}
+  {% set s = item.status if current_user.is_authenticated else item.status_public %}
   {% if s == 'ok' %}{% set ok_count.v  = ok_count.v  + 1 %}
   {% elif s == 'low' %}{% set low_count.v = low_count.v + 1 %}
   {% else %}{% set out_count.v = out_count.v + 1 %}{% endif %}
@@ -152,7 +152,8 @@
 
     <div class="item-grid" id="itemGrid">
       {% for item in items %}
-      {% set st = item.status %}
+      {% set st = item.status if current_user.is_authenticated else item.status_public %}
+      {% set total_display = item.total_qty if current_user.is_authenticated else item.total_qty_public %}
       <div class="item-card {% if st=='out' %}out-stock{% elif st=='low' %}low-stock{% endif %} {% if item.is_hidden %}hidden-item{% endif %}"
            data-name="{{ item.name }}" data-cat="{{ item.category.name if item.category else '' }}"
            data-status="{{ st }}" data-id="{{ item.id }}" onclick="toggleExpand(this)">
@@ -162,7 +163,7 @@
         <div class="item-card-header">
           <div class="item-card-name">{{ item.name }}</div>
           <div style="text-align:right;white-space:nowrap">
-            <span class="item-total" style="color:{% if st=='out' %}var(--out){% elif st=='low' %}var(--low){% else %}var(--ok){% endif %}">{{ item.total_qty }}</span>
+            <span class="item-total" style="color:{% if st=='out' %}var(--out){% elif st=='low' %}var(--low){% else %}var(--ok){% endif %}">{{ total_display }}</span>
             <span class="item-unit">{{ item.unit }}</span>
           </div>
         </div>

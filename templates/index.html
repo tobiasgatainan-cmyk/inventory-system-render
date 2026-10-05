@@ -67,6 +67,8 @@
 .item-expand.open{display:block}
 .batch-row-wrap{padding:5px 0;border-bottom:1px solid var(--border)}
 .batch-row-wrap:last-child{border-bottom:none}
+.batch-row-wrap.hidden-spec{background:#e5e3e0;margin:0 -4px;padding:5px 4px;border-radius:6px}
+.hidden-spec-badge{display:inline-block;background:#5a5550;color:#fff;border-radius:10px;padding:0 6px;font-size:10px;font-weight:600;margin-left:4px;vertical-align:middle}
 .batch-row{display:flex;align-items:center;gap:6px;font-size:12px}
 .batch-brand{font-weight:600;color:var(--text2);min-width:60px}
 .batch-spec{color:var(--text3);flex:1}
@@ -229,10 +231,10 @@ function toggleExpand(card){
           }
         }
         // 不顯示備註和進價
-        html+=`<div class="batch-row-wrap">
+        html+=`<div class="batch-row-wrap${b.is_hidden ? ' hidden-spec' : ''}">
           <div class="batch-row">
             <span class="batch-brand">${b.brand}</span>
-            <span class="batch-spec">${b.spec}</span>
+            <span class="batch-spec">${b.spec}${b.is_hidden ? '<span class="hidden-spec-badge">🔒 隱藏</span>' : ''}</span>
             <span class="batch-qty" style="color:${b.qty<=3?'var(--low)':'var(--ok)'}">${b.qty}${b.unit}</span>
           </div>
           ${expLine}
@@ -378,7 +380,7 @@ async function openSpecModal(itemId, btn){
     data.batches.forEach(b => {
       if(b.qty <= 0) return;
       const key = b.brand + '／' + b.spec;
-      if(!specMap[key]) specMap[key] = {brand: b.brand, spec: b.spec, total: 0};
+      if(!specMap[key]) specMap[key] = {brand: b.brand, spec: b.spec, total: 0, is_hidden: b.is_hidden};
       specMap[key].total += b.qty;
     });
     specData = Object.values(specMap);
@@ -396,9 +398,9 @@ async function openSpecModal(itemId, btn){
         </div>`;
     } else {
       list.innerHTML = specData.map((s, i) => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #edddd0;border-radius:8px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #edddd0;border-radius:8px;margin-bottom:8px;${s.is_hidden ? 'background:#e5e3e0' : ''}">
           <div style="flex:1">
-            <div style="font-weight:600;font-size:13px">${s.spec}</div>
+            <div style="font-weight:600;font-size:13px">${s.spec}${s.is_hidden ? '<span class="hidden-spec-badge">🔒 隱藏</span>' : ''}</div>
             <div style="font-size:11px;color:#a8958c">${s.brand} ／ 可申請 ${s.total}</div>
           </div>
           <input type="number" id="spec-qty-${i}" value="0" min="0" max="${s.total}"

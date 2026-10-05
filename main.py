@@ -448,6 +448,7 @@ def api_item_detail(iid):
                         'days_left':   days_left,
                         'note':        batch.note or '',
                         'unit':        item.unit,
+                        'is_hidden':   spec.is_hidden,
                     })
         return jsonify({'item': item.name, 'unit': item.unit, 'batches': result})
     except Exception as e:

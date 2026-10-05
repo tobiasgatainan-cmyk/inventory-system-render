@@ -117,6 +117,25 @@ class Item(db.Model):
         if total <= safe: return 'low'
         return 'ok'
 
+    @property
+    def total_qty_public(self):
+        """跟 total_qty 一樣，但不計入被隱藏的規格，給未登入的前台使用者看"""
+        return sum(b.total_qty_public for b in self.brands)
+
+    @property
+    def status_public(self):
+        """跟 status 一樣，但用 total_qty_public 計算，給未登入的前台使用者看"""
+        total = self.total_qty_public
+        safe  = sum(b.safe_qty for b in self.brands)
+        if total == 0: return 'out'
+        if total <= safe: return 'low'
+        return 'ok'
+
+    @property
+    def has_any_visible_spec(self):
+        """這個品項底下是不是至少有一個沒被隱藏的規格（給未登入使用者判斷「可申請」按鈕要不要顯示用）"""
+        return any(not s.is_hidden for b in self.brands for s in b.specs)
+
 
 class Brand(db.Model):
     __tablename__ = 'brands'
@@ -131,6 +150,11 @@ class Brand(db.Model):
     def total_qty(self):
         return sum(s.total_qty for s in self.specs)
 
+    @property
+    def total_qty_public(self):
+        """跟 total_qty 一樣，但不計入被隱藏（is_hidden）的規格，給未登入的前台使用者看"""
+        return sum(s.total_qty for s in self.specs if not s.is_hidden)
+
 
 class Spec(db.Model):
     __tablename__ = 'specs'
@@ -138,6 +162,7 @@ class Spec(db.Model):
     brand_id   = db.Column(db.Integer, db.ForeignKey('brands.id'), nullable=False)
     name       = db.Column(db.String(100))
     sort_order = db.Column(db.Integer, default=0)
+    is_hidden  = db.Column(db.Boolean, default=False)  # 只有登入後台的人看得到這個規格，未登入的前台使用者看不到（但品項本身仍可見）
     batches    = db.relationship('Batch', backref='spec', lazy=True, cascade='all, delete-orphan')
 
     @property
@@ -406,8 +431,11 @@ def api_item_detail(iid):
             return jsonify({'error': '品項不存在'}), 404
         today = now_tw().date()
         result = []
+        show_hidden_specs = current_user.is_authenticated
         for brand in item.brands:
             for spec in brand.specs:
+                if spec.is_hidden and not show_hidden_specs:
+                    continue
                 for batch in spec.batches:
                     exp = batch.expiry_date.isoformat() if batch.expiry_date else None
                     days_left = (batch.expiry_date - today).days if batch.expiry_date else None
@@ -703,6 +731,7 @@ def _save_brands(item_id, form, is_edit=False, log_user=None):
     spec_costs     = form.getlist('spec_cost[]')
     spec_suppliers = form.getlist('spec_supplier[]')
     spec_notes     = form.getlist('spec_note[]')
+    spec_hiddens   = form.getlist('spec_hidden[]')
     brand_indices  = form.getlist('spec_brand_index[]')
 
     # 新增品項時，如果有帶初始庫存（qty>0），要建立的批次記得回傳給呼叫端，
@@ -732,8 +761,8 @@ def _save_brands(item_id, form, is_edit=False, log_user=None):
 
     # 同一品牌底下，同名規格也一律重複使用既有的，道理相同
     spec_name_map = {}
-    for si, (sname, sqty, sexp, scost, ssup, snote, bidx) in enumerate(
-            zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_suppliers, spec_notes, brand_indices)):
+    for si, (sname, sqty, sexp, scost, ssup, snote, shidden, bidx) in enumerate(
+            zip(spec_names, spec_qtys, spec_expiries, spec_costs, spec_suppliers, spec_notes, spec_hiddens, brand_indices)):
         if not sname.strip():
             # 規格名稱是空的：如果其他欄位（數量、到期日、進價、供應商、備註）
             # 也都是空的，代表這只是使用者多按了「＋新增規格」但沒用到的空白列，忽略即可；
@@ -763,6 +792,7 @@ def _save_brands(item_id, form, is_edit=False, log_user=None):
                 spec = Spec(brand_id=brand.id, name=sname.strip(), sort_order=si)
                 db.session.add(spec); db.session.flush()
             spec_name_map[skey] = spec
+        spec.is_hidden = (shidden == '1')
 
         # 編輯模式下，只建立 spec，不建立新 batch（庫存由入庫管理）
         # 新增模式下，建立初始 batch
@@ -1055,11 +1085,13 @@ def cart_add():
         return jsonify({'ok': False, 'msg': '品項不存在'})
 
     # 收集符合條件的批次，依到期日排序（FEFO）
+    show_hidden_specs = current_user.is_authenticated
     all_batches = []
     for brand in item.brands:
         if brand_filter and brand.name != brand_filter: continue
         for spec in brand.specs:
             if spec_filter and spec.name != spec_filter: continue
+            if spec.is_hidden and not show_hidden_specs: continue
             for batch in spec.batches:
                 if batch.available_qty > 0:
                     all_batches.append(batch)
@@ -1071,7 +1103,8 @@ def cart_add():
     if not all_batches:
         total_available = sum(
             b.available_qty for brand in item.brands
-            for spec in brand.specs for b in spec.batches
+            for spec in brand.specs if (show_hidden_specs or not spec.is_hidden)
+            for b in spec.batches
         ) if not (brand_filter or spec_filter) else 0
         return jsonify({'ok': False, 'insufficient': True,
                         'available': 0, 'msg': '目前無庫存'})
@@ -1764,6 +1797,7 @@ with app.app_context():
                 "ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
                 "ALTER TABLE items      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
                 "ALTER TABLE items      ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE specs      ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_email VARCHAR(120)",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS notify_on BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE users      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",

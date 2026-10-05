@@ -642,6 +642,7 @@ def admin_edit_item(iid):
         brand_safes   = request.form.getlist('brand_safe[]')
         spec_ids      = request.form.getlist('spec_id[]')
         spec_names    = request.form.getlist('spec_name[]')
+        spec_hiddens  = request.form.getlist('spec_hidden[]')
         brand_indices = request.form.getlist('spec_brand_index[]')
 
         # 品牌：有帶 brand_id 就原地更新名稱／安全庫存；沒有的話，
@@ -668,7 +669,7 @@ def admin_edit_item(iid):
 
         # 規格：邏輯相同，原地更新優先，其次同名沿用，最後才新增
         kept_spec_ids = set()
-        for si, (sid, sname, bidx) in enumerate(zip(spec_ids, spec_names, brand_indices)):
+        for si, (sid, sname, shidden, bidx) in enumerate(zip(spec_ids, spec_names, spec_hiddens, brand_indices)):
             if not sname.strip(): continue
             sname = sname.strip()
             try: bidx = int(bidx)
@@ -688,6 +689,7 @@ def admin_edit_item(iid):
                 spec = Spec(brand_id=brand.id, name=sname, sort_order=si)
                 db.session.add(spec); db.session.flush()
                 db.session.add(Batch(spec_id=spec.id, qty=0))  # 新規格先給一筆空批次，等待入庫
+            spec.is_hidden = (shidden == '1')
             kept_spec_ids.add(spec.id)
 
         # 刪除使用者真的移除的品牌／規格；若底下還有批次紀錄（例如曾被申請單引用），
